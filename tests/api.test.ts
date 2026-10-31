@@ -66,3 +66,11 @@ test('tools cannot execute when disabled even if model emits a call',async t=>{
   const response=await request('/api/chat',{method:'POST',headers,body:JSON.stringify({model:'test:1b',messages:[{role:'user',content:'save'}],toolsEnabled:false})});
   assert.match(await response.text(),/Tools are disabled/);assert.equal(store.notes().length,0);
 });
+
+test('voice mode enforces short output, small context and no tool definitions',async t=>{
+  let captured:Record<string,any>|undefined;
+  const transport:typeof fetch=async(_url,init)=>{captured=JSON.parse(init?.body as string);return new Response('{"message":{"content":"Try one small task."},"done":true}\n');};
+  const {request,headers}=await fixture(t,transport);
+  const response=await request('/api/chat',{method:'POST',headers,body:JSON.stringify({model:'test:1b',messages:[{role:'user',content:'Help me focus'}],mode:'voice',profile:'balanced',toolsEnabled:true})});
+  assert.match(await response.text(),/Try one small task/);assert.equal(captured?.options.num_predict,192);assert.equal(captured?.options.num_ctx,2048);assert.equal(captured?.tools,undefined);assert.match(captured?.messages[0].content,/spoken conversation/);
+});

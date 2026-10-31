@@ -3,9 +3,11 @@ import {
   Activity, ArrowDownToLine, ArrowRight, ArrowUp, ArrowUpRight, AudioLines, BookOpen,
   Check, ChevronDown, CircleHelp, FileText, Loader2, MessageSquare,
   Mic, PanelLeftOpen, Plus, RefreshCw, Settings2, ShieldCheck,
-  Sparkles, Square, Trash2, Wrench, X, Zap,
+  Sparkles, Square, Trash2, Wrench, X, Zap, Volume2, VolumeX,
 } from 'lucide-react';
 import { startCapture, type Capture } from './voice';
+import VoiceRoom from './VoiceRoom';
+import { SentenceSpeaker } from './speech';
 
 type Page = 'conversation' | 'memory' | 'tools' | 'settings';
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
@@ -57,6 +59,9 @@ export default function App() {
   const [error, setError] = useState('');
   const [toolsEnabled, setToolsEnabled] = useState(true);
   const [speak, setSpeak] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const speechQueue = useRef<SentenceSpeaker | null>(null);
+  const [speechActive, setSpeechActive] = useState(false);
   const [localVoice, setLocalVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [audit, setAudit] = useState<Audit[]>([]);
@@ -157,6 +162,7 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', hidden);
     return () => {
+      speechQueue.current?.cancel();
       mounted.current = false; captureGeneration.current++;
       abort.current?.abort(); capture.current?.dispose();
       if (streamFrame.current !== null) cancelAnimationFrame(streamFrame.current);
@@ -173,13 +179,15 @@ export default function App() {
     window.addEventListener('keydown', shortcut); return () => window.removeEventListener('keydown', shortcut);
   }, [busy, sidebar]);
 
+  function stopSpeech() { speechQueue.current?.cancel(); speechQueue.current = null; window.speechSynthesis?.cancel(); setSpeechActive(false); }
   function say(text: string) {
-    if (!speak || !localVoice || !text || !('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = localVoice; utterance.rate = 1.02; speaking.current = true;
-    utterance.onend = () => { speaking.current = false; };
-    utterance.onerror = () => { speaking.current = false; };
-    window.speechSynthesis.speak(utterance);
+    if (!localVoice || !text) return;
+    stopSpeech(); const queue = new SentenceSpeaker(localVoice, 1.08, setSpeechActive);
+    speechQueue.current = queue; queue.push(text); void queue.finish();
+  }
+  function openVoice() {
+    stopSpeech(); captureGeneration.current++; capture.current?.dispose(); capture.current = null;
+    setRecording(false); if(recordTimer.current) clearInterval(recordTimer.current); setVoiceOpen(true);
   }
   async function send(event?: FormEvent) {
     event?.preventDefault();
@@ -196,6 +204,8 @@ export default function App() {
     const history: Message[] = [...messages, { id: uid(), role: 'user', content }];
     const answerId = uid(); setMessages([...history, { id: answerId, role: 'assistant', content: '' }]);
     const controller = new AbortController(); abort.current = controller;
+    const spoken = speak && localVoice ? new SentenceSpeaker(localVoice, 1.08, setSpeechActive) : null;
+    speechQueue.current?.cancel(); speechQueue.current = spoken;
     let answer = ''; let receivedAction = false; let answerDirty = false;
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     const publishAnswer = () => {
@@ -216,7 +226,7 @@ export default function App() {
         const event: Event = JSON.parse(line);
         if (event.type === 'token') {
           if (!receivedAction) setStatus('Thinking with you');
-          receivedAction = true; answer += event.text || ''; answerDirty = true;
+          receivedAction = true; answer += event.text || ''; answerDirty = true; spoken?.push(event.text || '');
           if (streamFrame.current === null) streamFrame.current = requestAnimationFrame(publishAnswer);
         }
         if (event.type === 'status') setStatus(event.text || 'Working locally');
@@ -232,8 +242,9 @@ export default function App() {
         while ((newline = buffer.indexOf('\n')) >= 0) { const line = buffer.slice(0, newline); buffer = buffer.slice(newline + 1); consume(line); }
         if (done) { if (buffer.trim()) consume(buffer); break; }
       }
-      publishAnswer(); setStatus(''); say(answer);
+      publishAnswer(); setStatus(''); void spoken?.finish();
     } catch (cause) {
+      spoken?.cancel();
       if ((cause as Error).name === 'AbortError') setStatus('Response stopped');
       else { setError((cause as Error).message); setStatus(''); }
       if (!answer && !receivedAction) { setMessages(current => current.filter(message => message.id !== answerId && message.id !== history[history.length - 1].id)); setInput(current => current || content); }
@@ -264,7 +275,7 @@ export default function App() {
     captureGeneration.current++; capture.current?.dispose(); capture.current = null; setRecording(false);
     if (recordTimer.current) clearInterval(recordTimer.current);
     setInput(''); abort.current?.abort(); setMessages([]); setProposals([]); setMetrics(null); setStatus(''); setError('');
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    stopSpeech();
   }
   function exportConversation() {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), model, messages }, null, 2)], { type: 'application/json' });
@@ -284,13 +295,13 @@ export default function App() {
   }
   async function toggleRecording() {
     if (recording) { await stopRecording(); return; }
-    if (!health?.voice.configured) { setError('Local dictation needs whisper.cpp. Follow docs/voice.md to connect the local transcription service.'); return; }
+    if (!health?.voice.configured) { setError('Local dictation needs a speech service. Run npm run voice:setup and follow docs/voice.md.'); return; }
     if (!navigator.mediaDevices?.getUserMedia) { setError('Microphone capture is unavailable in this browser. Open the local app in Safari or Chrome.'); return; }
     if (capturePending.current) return;
     capturePending.current = true; setStartingRecording(true); const generation = ++captureGeneration.current;
     setError('');
     try {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopSpeech();
       const activeCapture = await startCapture();
       if (!mounted.current || generation !== captureGeneration.current || document.hidden) { activeCapture.dispose(); return; }
       capture.current = activeCapture;
@@ -311,7 +322,7 @@ export default function App() {
     setPage(next); setSidebar(false); setError('');
   };
 
-  return <div className="app-shell">
+  return <><div className="app-shell" inert={voiceOpen || undefined}>
     {sidebar && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setSidebar(false)} />}
     <aside ref={navigation} id="workspace-navigation" className={`sidebar ${sidebar ? 'open' : ''}`} onKeyDown={event => {
       if (!sidebar || event.key !== 'Tab') return;
@@ -342,16 +353,16 @@ export default function App() {
       <main className={`main-layout ${page !== 'conversation' ? 'full-page' : ''}`}>
         <section className={`main-content ${page === 'conversation' ? 'conversation-page' : 'content-page'}`}>
           {page === 'conversation' && <>
-            <div className="conversation-toolbar"><div className="model-picker"><span className={`model-icon ${connected ? 'ready' : ''}`}><Sparkles size={14} /></span><select aria-label="Local language model" value={model} onChange={event => setModel(event.target.value)} disabled={!modelOptions.length || busy}>{!modelOptions.length && <option value="">No model connected</option>}{modelOptions.map(name => <option key={name} value={name}>{name.replace(/:latest$/, '')}</option>)}</select><ChevronDown size={12} /></div><div className="conversation-actions">{messages.length > 0 && <><button className="icon-button" aria-label="Export conversation" title="Export conversation" onClick={exportConversation}><ArrowDownToLine size={15} /></button><button className="icon-button" aria-label="Clear conversation" title="Clear conversation" onClick={clearConversation} disabled={busy}><Trash2 size={15} /></button></>}<span className="session-label">LOCAL SESSION</span></div></div>
+            <div className="conversation-toolbar"><div className="model-picker"><span className={`model-icon ${connected ? 'ready' : ''}`}><Sparkles size={14} /></span><select aria-label="Local language model" value={model} onChange={event => setModel(event.target.value)} disabled={!modelOptions.length || busy}>{!modelOptions.length && <option value="">No model connected</option>}{modelOptions.map(name => <option key={name} value={name}>{name.replace(/:latest$/, '')}</option>)}</select><ChevronDown size={12} /></div><div className="conversation-actions"><button className="voice-entry" aria-label="Open voice conversation" onClick={openVoice} disabled={busy || transcribing || startingRecording}><AudioLines size={15}/><span>Voice conversation</span></button><button className="icon-button" aria-label={speechActive ? "Stop speaking" : "Toggle spoken responses"} title={speechActive ? "Stop speaking" : "Read responses aloud"} aria-pressed={speak} onClick={()=>{if(speechActive){stopSpeech();return;}setSpeak(value=>!value);}} disabled={!localVoice}>{speak?<Volume2 size={16}/>:<VolumeX size={16}/>}</button>{messages.length > 0 && <><button className="icon-button" aria-label="Export conversation" title="Export conversation" onClick={exportConversation}><ArrowDownToLine size={15} /></button><button className="icon-button" aria-label="Clear conversation" title="Clear conversation" onClick={clearConversation} disabled={busy}><Trash2 size={15} /></button></>}<span className="session-label">LOCAL SESSION</span></div></div>
             <div className={`conversation-scroll ${messages.length ? 'has-messages' : ''}`} onScroll={event => { const panel = event.currentTarget; followTail.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100; }}>
               {!messages.length && <div className="welcome">
                 <Orb active={busy} recording={recording} />
                 <div className="eyebrow"><span /> INTELLIGENCE, CLOSE TO HOME <span /></div>
                 <h1>A little more space<br />for <em>your mind.</em></h1>
                 <p className="welcome-description">Think out loud. Follow a spark. Make something yours.<br />Your personal AI, right here on your Mac.</p>
-                <div className="starter-grid">{starters.map(item => <button className="starter-card" key={item.tag} onClick={() => { setInput(item.prompt); composer.current?.focus(); }}><span className="starter-top"><item.icon size={17} strokeWidth={1.5} /><ArrowUpRight size={14} /></span><span className="starter-tag">{item.tag}</span><strong>{item.title}</strong></button>)}</div>
+                <button className="welcome-talk" onClick={openVoice}><AudioLines size={19}/> Let’s talk <ArrowUpRight size={16}/></button><div className="starter-grid">{starters.map(item => <button className="starter-card" key={item.tag} onClick={() => { setInput(item.prompt); composer.current?.focus(); }}><span className="starter-top"><item.icon size={17} strokeWidth={1.5} /><ArrowUpRight size={14} /></span><span className="starter-tag">{item.tag}</span><strong>{item.title}</strong></button>)}</div>
               </div>}
-              {messages.length > 0 && <div className="message-list">{messages.map(message => <article className={`message ${message.role}`} key={message.id}><div className="message-avatar">{message.role === 'assistant' ? <Brand small /> : 'You'}</div><div className="message-body"><div className="message-label">{message.role === 'assistant' ? 'Auralis' : 'You'}{message.role === 'assistant' && <span>ON DEVICE</span>}</div>{message.content ? <div className="message-text">{message.content}</div> : <div className="thinking-dots" aria-label="Waiting for model"><i /><i /><i /></div>}</div></article>)}
+              {messages.length > 0 && <div className="message-list">{messages.map(message => <article className={`message ${message.role}`} key={message.id}><div className="message-avatar">{message.role === 'assistant' ? <Brand small /> : 'You'}</div><div className="message-body"><div className="message-label">{message.role === 'assistant' ? 'Auralis' : 'You'}{message.role === 'assistant' && <span>ON DEVICE</span>}</div>{message.content ? <><div className="message-text">{message.content}</div>{message.role === 'assistant' && <button className="message-listen" onClick={()=>say(message.content)} disabled={!localVoice || busy}><Volume2 size={12}/> Read aloud</button>}</> : <div className="thinking-dots" aria-label="Waiting for model"><i /><i /><i /></div>}</div></article>)}
                 {busy && <div className="stream-status" role="status"><span className="status-dot" />{status || 'Working locally'}<button onClick={() => abort.current?.abort()}>Stop <Square size={10} /></button></div>}
                 {proposals.map(proposal => <div className="approval-card" key={proposal.id}><div className="approval-heading"><ShieldCheck size={18} /><div><strong>A little permission first</strong><span>Auralis wants to save a memory on this Mac.</span></div></div><div className="approval-preview"><strong>{proposal.args.title}</strong><p>{proposal.args.content}</p></div><div className="approval-actions"><small>{Date.now() >= proposal.expiresAt ? 'This request expired. Start a new conversation to try again.' : 'Only this exact note will be saved.'}</small><button className="button secondary" onClick={() => void decide(proposal, false)} disabled={Boolean(decision)}>Decline</button><button className="button primary" onClick={() => void decide(proposal, true)} disabled={Boolean(decision) || Date.now() >= proposal.expiresAt}>{decision === proposal.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />}Save memory</button></div></div>)}
               </div>}
@@ -390,7 +401,7 @@ export default function App() {
             <div className="page-heading"><div className="eyebrow">MAKE YOURSELF AT HOME</div><h1>Your assistant.<br /><em>Your way.</em></h1><p>Choose how Auralis thinks, speaks, and remembers. Everything starts with your privacy.</p></div>
             {error && <div className="error-notice" role="alert">{error}</div>}
             <section className="settings-group"><div className="settings-section-title"><Sparkles size={16} /><h2>Intelligence</h2></div><div className="setting-row"><div><strong>Local model</strong><p>{connected ? 'Models discovered from your local Ollama service.' : 'Start Ollama and install a model to connect.'}</p></div><select className="setting-select" value={model} onChange={event => setModel(event.target.value)} aria-label="Choose language model" disabled={!modelOptions.length}>{!modelOptions.length && <option>No installed models</option>}{modelOptions.map(name => <option key={name}>{name}</option>)}</select></div><div className="setting-row"><div><strong>Generation profile</strong><p>Fast uses a smaller context to keep memory use light.</p></div><div className="segmented"><button className={profile === 'fast' ? 'active' : ''} onClick={() => setProfile('fast')}>Fast</button><button className={profile === 'balanced' ? 'active' : ''} onClick={() => setProfile('balanced')}>Balanced</button></div></div></section>
-            <section className="settings-group"><div className="settings-section-title"><AudioLines size={16} /><h2>Voice</h2></div><div className="setting-row"><div><strong>Speak responses</strong><p>{localVoice ? `On-device voice: ${localVoice.name}. Starts after the response completes.` : 'No installed local speech voice detected in this browser.'}</p></div><Toggle checked={speak} onChange={() => { setSpeak(value => !value); if (speak) window.speechSynthesis?.cancel(); }} label="Speak responses using an installed local voice" disabled={!localVoice} /></div><div className="setting-row"><div><strong>Local dictation</strong><p>{health?.voice.configured ? 'The local transcription adapter is configured. Microphone opens only when you press record.' : 'Connect whisper.cpp to enable private microphone transcription. See docs/voice.md.'}</p></div><span className={`tag ${health?.voice.configured ? 'safe' : ''}`}>{health?.voice.configured ? 'CONFIGURED' : 'SETUP NEEDED'}</span></div></section>
+            <section className="settings-group"><div className="settings-section-title"><AudioLines size={16} /><h2>Voice</h2></div><div className="setting-row"><div><strong>Speak responses</strong><p>{localVoice ? `On-device voice: ${localVoice.name}. Speaks sentence by sentence while the reply arrives.` : 'No installed local speech voice detected in this browser.'}</p></div><Toggle checked={speak} onChange={() => { setSpeak(value => !value); if (speak) window.speechSynthesis?.cancel(); }} label="Speak responses using an installed local voice" disabled={!localVoice} /></div><div className="setting-row"><div><strong>Local dictation</strong><p>{health?.voice.configured ? 'The local transcription adapter is configured. Microphone opens only when you press record.' : 'Run npm run voice:setup for local dictation. See docs/voice.md for the start commands.'}</p></div><span className={`tag ${health?.voice.configured ? 'safe' : ''}`}>{health?.voice.configured ? 'CONFIGURED' : 'SETUP NEEDED'}</span></div></section>
             <section className="settings-group"><div className="settings-section-title"><ShieldCheck size={16} /><h2>Privacy & control</h2></div><div className="setting-row"><div><strong>Conversation history</strong><p>This chat lives in memory for this browser session. Export only when you choose.</p></div><span className="tag safe">SESSION ONLY</span></div><div className="setting-row"><div><strong>Model tools</strong><p>Calculator is bounded. Saving a note needs your approval.</p></div><Toggle checked={toolsEnabled} onChange={() => setToolsEnabled(value => !value)} label="Allow model tools" /></div><div className="setting-row"><div><strong>Current conversation</strong><p>Export a copy, or clear the messages from this session.</p></div><div className="setting-buttons"><button className="button secondary" onClick={exportConversation} disabled={!messages.length}><ArrowDownToLine size={14} /> Export</button><button className="button secondary danger" onClick={clearConversation} disabled={busy || !messages.length}><Trash2 size={14} /> Clear</button></div></div></section>
             <div className="about-card"><Brand /><div><strong>Auralis <span>0.1</span></strong><p>An independent, local-first assistant.<br />Built for a little more clarity, and a lot more ownership.</p></div><span className="about-local"><ShieldCheck size={14} /> LOCAL FIRST</span></div>
           </>}
@@ -410,5 +421,5 @@ export default function App() {
       </main>
       <footer className="workspace-footer"><span>PERSONAL INTELLIGENCE, LOCALLY.</span><span><span className="status-dot" />{apiReady ? 'Local service connected' : 'Connecting to local service'}</span></footer>
     </div>
-  </div>;
+  </div>{voiceOpen && <VoiceRoom request={request} models={modelOptions} model={model} configured={Boolean(health?.voice.configured)} history={messages} onClose={()=>setVoiceOpen(false)} onTurn={(user,answer)=>setMessages(current=>[...current,{id:uid(),role:'user',content:user},...(answer?[{id:uid(),role:'assistant' as const,content:answer}]:[])])}/> }</>;
 }

@@ -118,3 +118,7 @@ Set environment variables before starting the server. `.env` is a reference exam
 - `AURALIS_DEV`: set to `1` by the development command to permit the local Vite origin.
 
 Inference endpoints require `http:` with hostname exactly `127.0.0.1`. Remote addresses, named hosts including `localhost`, embedded credentials, queries, and fragments are rejected. Endpoint configuration is operator-controlled and cannot be supplied by the model.
+
+## Voice conversation profile
+
+`POST /api/chat` accepts optional `mode: "voice"` (default `"chat"`). Voice mode forces context 2,048, output budget 192 tokens per step and disables tool definitions and execution regardless of client `toolsEnabled`. It requests one to three short spoken sentences. The NDJSON event contract is unchanged.

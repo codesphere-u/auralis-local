@@ -52,11 +52,11 @@ export class Ollama {
     const info=z.object({...remoteMetadata,model_info:z.record(z.string(),z.unknown())}).parse(await boundedJSON(response));
     if(isRemote(info) || !Object.keys(info.model_info).length)throw new Error('Remote or unverifiable model blocked. Use downloaded local weights.');
   }
-  async *chat(model:string,messages:ChatMessage[],context:number,tools:boolean,signal:AbortSignal):AsyncGenerator<Packet> {
+  async *chat(model:string,messages:ChatMessage[],context:number,tools:boolean,signal:AbortSignal,maxTokens=1024):AsyncGenerator<Packet> {
     await this.assertLocal(model,signal);
     const res = await this.transport(`${this.endpoint}/api/chat`,{
       method:'POST',redirect:'error',signal,headers:{'content-type':'application/json'},
-      body:JSON.stringify({model,messages,stream:true,think:false,keep_alive:'2m',options:{num_ctx:context,num_predict:1024,temperature:0.6},...(tools?{tools:toolDefinitions}:{})}),
+      body:JSON.stringify({model,messages,stream:true,think:false,keep_alive:'2m',options:{num_ctx:context,num_predict:maxTokens,temperature:0.6},...(tools?{tools:toolDefinitions}:{})}),
     });
     if (!res.ok || !res.body) {
       if(res.status===404) throw new Error(`Model ${model} is not installed. Pull it with Ollama first.`);

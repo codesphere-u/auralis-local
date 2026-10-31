@@ -28,7 +28,22 @@ export interface Capture {
   dispose: () => void;
 }
 
-export async function startCapture(): Promise<Capture> {
+export type CaptureOptions = { onLevel?: (level: number) => void; onEnd?: (speech: boolean) => void };
+export class TurnDetector {
+  private speechMs = 0;
+  private silenceMs = 0;
+  private totalMs = 0;
+  speech = false;
+  update(level: number, ms: number): 'speech' | 'silence' | 'limit' | undefined {
+    this.totalMs += ms;
+    if(level > 0.015) { this.speechMs += ms; this.silenceMs = 0; if(this.speechMs >= 200) this.speech = true; }
+    else { this.silenceMs += ms; if(!this.speech) this.speechMs = 0; }
+    if(this.totalMs >= 30000) return 'limit';
+    if(this.speech && this.silenceMs >= 950) return 'speech';
+    if(!this.speech && this.totalMs >= 7000) return 'silence';
+  }
+}
+export async function startCapture(options: CaptureOptions = {}): Promise<Capture> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
   let context: AudioContext;
   try { context = new AudioContext(); } catch (error) { stream.getTracks().forEach(track => track.stop()); throw error; }
@@ -46,13 +61,20 @@ export async function startCapture(): Promise<Capture> {
   };
   const chunks: Float32Array[] = []; let sampleCount = 0;
   const sampleLimit = Math.floor(context.sampleRate * 30);
+  const detector = new TurnDetector();
+  let nextLevel = 0;
+  const end = () => { dispose(); options.onEnd?.(detector.speech); };
   processor.onaudioprocess = event => {
     const input = event.inputBuffer.getChannelData(0);
     const remaining = sampleLimit - sampleCount;
-    if (remaining <= 0) { dispose(); return; }
+    if (remaining <= 0) { end(); return; }
     const bounded = new Float32Array(input.subarray(0, remaining));
     chunks.push(bounded); sampleCount += bounded.length;
-    if (sampleCount >= sampleLimit) dispose();
+    let sum = 0; for(const sample of bounded) sum += sample * sample;
+    const level = Math.sqrt(sum / Math.max(1,bounded.length));
+    if(sampleCount >= nextLevel) { options.onLevel?.(Math.min(1,level * 7)); nextLevel = sampleCount + context.sampleRate / 12; }
+    const detected = detector.update(level, bounded.length / context.sampleRate * 1000);
+    if ((options.onEnd && detected) || sampleCount >= sampleLimit) end();
   };
   source.connect(processor); processor.connect(mute); mute.connect(context.destination);
   try { await context.resume(); } catch (error) { stream.getTracks().forEach(track => track.stop()); await context.close(); throw error; }

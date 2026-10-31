@@ -51,3 +51,11 @@ This evidence applies to the implementation commit above. The subsequent documen
 - No promise of fixed tokens per second or first-token latency on all 16 GB Macs.
 - Model weights and transcription runtime are external installations.
 - Advanced integrations listed on the roadmap are not part of the current release.
+
+## Voice interface update — 2026-10-31
+
+- Local suite expanded to 30 passing tests, including streamed sentence boundaries, voice activity timing, stale callback cancellation and enforced voice context/output/tool budgets. Production TypeScript and Vite build passed.
+- Dedicated voice screen inspected in the local browser, with installed local voices detected.
+- Managed MLX multilingual Whisper base installed locally; offline serving started successfully. A synthetic Samantha recording was transcribed directly and through the Auralis API. Auralis was misrecognized as “Oralus”; this is not an accuracy benchmark. One warm transcription through Auralis took 101 ms; this single observation does not establish typical latency.
+- Actual user microphone input and acoustic playback are not claimed verified.
+- The earlier publication/CI evidence above refers to the initial implementation; voice-update commit CI is reported against its own commit in GitHub Actions.

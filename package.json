@@ -12,9 +12,15 @@
     "start": "tsx server/index.ts",
     "test": "tsx --test tests/*.test.ts",
     "check": "npm test && npm run build",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "voice:setup": "uv run --python 3.12 scripts/voice_service.py --setup",
+    "voice:start": "uv run --offline --python 3.12 scripts/voice_service.py",
+    "start:voice": "WHISPER_URL=http://127.0.0.1:8080/inference tsx server/index.ts",
+    "talk": "concurrently -k \"npm:voice:start\" \"npm:start:voice\""
   },
-  "engines": {"node": ">=22.12.0"},
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "dependencies": {
     "lucide-react": "^0.468.0",
     "react": "19.3.1",

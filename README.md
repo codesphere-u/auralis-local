@@ -15,7 +15,8 @@ Built for a 16 GB Apple Silicon Mac. The starting model is `qwen3.5:4b` through 
 - Local model discovery and honest disconnected states.
 - A restricted calculator and model-proposed note saving with individual approval.
 - A memory view to inspect and delete saved notes; conversations stay in the page session by default.
-- Push-to-record voice input through an optional local whisper.cpp server. Speech output selects only browser voices marked as local.
+- A dedicated voice room with pause-to-send, live captions, local voice selection, speed controls and tap-to-interrupt.
+- Sentence-by-sentence spoken replies and per-message Read aloud. Optional Apple Silicon MLX dictation helper, with whisper.cpp compatibility.
 - Loopback-only services, request validation, origin checks, session / CSRF protection, bounded requests, and redacted audit events.
 - Automated checks and a GitHub Actions workflow. See the [verification record](docs/verification.md) for what was actually run.
 
@@ -54,6 +55,16 @@ npm start
 Open `http://127.0.0.1:4317`. The built interface and API share that address.
 
 If no model is installed, the interface still opens and explains how to connect. It does not invent an assistant response. Start with [the Mac setup guide](docs/setup.md) if a connection fails.
+
+## Talk with Auralis
+
+```sh
+npm run voice:setup
+npm run build
+npm run talk
+```
+
+The voice setup needs [uv](https://docs.astral.sh/uv/) and Apple Silicon. Open `http://127.0.0.1:4317` and choose **Let’s talk**. Normal voice use stays local after setup downloads. See [voice setup and controls](docs/voice.md).
 
 ## Privacy in practice
 
