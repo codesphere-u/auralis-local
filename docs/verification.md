@@ -35,7 +35,14 @@ The optional whisper.cpp setup is based on current upstream documentation. WAV e
 
 ## Publication
 
-The public repository [codesphere-u/auralis-local](https://github.com/codesphere-u/auralis-local) has been created. At the time of this record, code publication, published commit SHA verification, remote file inspection, and GitHub Actions completion are still pending. A repository existing does not establish that the application code or CI is published successfully.
+The complete application and documentation were published to the public repository [codesphere-u/auralis-local](https://github.com/codesphere-u/auralis-local) through the GitHub plugin.
+
+- Implementation commit: [`fde5dd76846c0515d7e9029e0cdf4c68d3059d4b`](https://github.com/codesphere-u/auralis-local/commit/fde5dd76846c0515d7e9029e0cdf4c68d3059d4b).
+- The remote recursive tree was inspected: all 39 source, configuration, test, license and documentation files were present, with no truncation.
+- The local Git checkout matched that remote commit, with a clean working tree and no whitespace errors.
+- [GitHub Actions run 41218693127](https://github.com/codesphere-u/auralis-local/actions/runs/41218693127) completed both `verify (ubuntu-latest)` and `verify (macos-latest)` successfully. Each job passed installation, `npm run check` (tests plus TypeScript and production build), and the production dependency audit.
+
+This evidence applies to the implementation commit above. The subsequent documentation-only commit records these results; it does not change application behavior. CI on later commits must be checked against their own SHA.
 
 ## Known limits
 
