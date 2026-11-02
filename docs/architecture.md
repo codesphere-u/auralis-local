@@ -12,6 +12,8 @@ flowchart LR
     P -->|proposal| UI
     UI -->|approve exact arguments| P
     P --> N[Local notes]
+    API --> K[Local BM25 knowledge base]
+    API --> WS[Guarded workspace inspector]
     API --> A[Redacted audit metadata]
     UI -->|user-started WAV capture| API
     API -->|optional loopback multipart| W[whisper.cpp]
@@ -63,7 +65,7 @@ Tool schemas are protocol descriptions, not authorization. All validation, expir
 
 The application data directory contains approved notes and a redacted event log. Owner-only permissions reduce unintended access by other local accounts. Note writes replace a temporary file atomically. The diagnostic audit log is bounded and can reset once its size limit is exceeded; it is not an immutable ledger. Notes remain plaintext at rest; use macOS account protection and disk encryption as appropriate. The store is not a secret vault.
 
-There is no hidden embedding index, background document ingestion, or automatic learning from conversation history. Adding retrieval later requires explicit source selection, deletion semantics, and a way to show which data entered a model request.
+There is no hidden background document ingestion or automatic learning from conversation history. The local knowledge base (`server/knowledge.ts`) indexes only documents explicitly added by the user or approved via a single-use `knowledge.index` proposal from the guarded workspace inspector (`server/workspace.ts`). When `useKnowledge` is enabled in chat, top-ranked BM25 + exact-phrase chunks are emitted in a `citations` stream event with exact file paths and 1-based line ranges (`#Lstart-Lend`) so the user can inspect which local passages entered the model request.
 
 ## Voice
 

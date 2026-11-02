@@ -10,15 +10,17 @@ Built for a 16 GB Apple Silicon Mac. The starting model is `qwen3.5:4b` through 
 
 ## What is implemented
 
-- Streamed chat with cancellation, model selection, and Fast / Balanced context profiles.
-- An animated interface with keyboard access, responsive layouts, and reduced motion support.
-- Local model discovery and honest disconnected states.
+- Streamed chat with cancellation, model selection, and Fast (`2,048` ctx) / Balanced (`4,096` ctx) context profiles.
+- Local document knowledge base (`server/knowledge.ts`) with deterministic line-aware chunking, hybrid BM25 + exact-phrase retrieval, and inline source citations (`path#Lstart-Lend`).
+- Guarded read-only workspace inspector (`server/workspace.ts`) with explicit path-traversal, symlink, dotfile, and secret-file blocking, plus single-use approval proposals for indexing files.
+- An animated interface with keyboard access, responsive layouts, live system/memory telemetry, and reduced motion support.
+- Local model discovery, cloud-alias blocking, `≤ 8 GiB` weight guard, and honest disconnected states.
 - A restricted calculator and model-proposed note saving with individual approval.
 - A memory view to inspect and delete saved notes; conversations stay in the page session by default.
 - A dedicated voice room with pause-to-send, live captions, local voice selection, speed controls and tap-to-interrupt.
 - Sentence-by-sentence spoken replies and per-message Read aloud. Optional Apple Silicon MLX dictation helper, with whisper.cpp compatibility.
 - Loopback-only services, request validation, origin checks, session / CSRF protection, bounded requests, and redacted audit events.
-- Automated checks and a GitHub Actions workflow. See the [verification record](docs/verification.md) for what was actually run.
+- Deterministic local pipeline benchmark (`npm run benchmark -- --local-only`) and automated verification suite (`npm run check`). See the [verification record](docs/verification.md) for what was actually run.
 
 ## Start on your Mac
 
@@ -84,8 +86,10 @@ Do not expose Auralis or its inference services to a network. Localhost protecti
 - [Measurement methodology](docs/benchmarking.md)
 - [Preliminary M5 observations](docs/measurements-2026-10-31.md)
 - [Verification evidence](docs/verification.md)
+- [Known limitations and trade-offs](docs/limitations.md)
+- [ADR 001: Loopback and explicit tool governance](docs/decisions/001-loopback-and-explicit-tool-governance.md)
 - [Roadmap and scope](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md)
+- [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security reporting](SECURITY.md)
 
 ## Development
 

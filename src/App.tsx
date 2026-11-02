@@ -1,27 +1,51 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   Activity, ArrowDownToLine, ArrowRight, ArrowUp, ArrowUpRight, AudioLines, BookOpen,
-  Check, ChevronDown, CircleHelp, FileText, Loader2, MessageSquare,
-  Mic, PanelLeftOpen, Plus, RefreshCw, Settings2, ShieldCheck,
+  Check, ChevronDown, CircleHelp, Database, FileText, Loader2, MessageSquare,
+  Mic, PanelLeftOpen, Plus, RefreshCw, Search, Settings2, ShieldCheck,
   Sparkles, Square, Trash2, Wrench, X, Zap, Volume2, VolumeX,
 } from 'lucide-react';
 import { startCapture, type Capture } from './voice';
 import VoiceRoom from './VoiceRoom';
 import { SentenceSpeaker } from './speech';
 
-type Page = 'conversation' | 'memory' | 'tools' | 'settings';
-type Message = { id: string; role: 'user' | 'assistant'; content: string };
+type Page = 'conversation' | 'knowledge' | 'memory' | 'tools' | 'settings';
+type Citation = {
+  chunkId: string; documentId: string; title: string; path: string; heading?: string;
+  startLine: number; endLine: number; snippet: string; score: number; matchedTerms: string[];
+};
+type Message = { id: string; role: 'user' | 'assistant'; content: string; citations?: Citation[]; retrievalMs?: number };
 type Note = { id: string; title: string; content: string; createdAt: string };
+type KnowledgeDoc = {
+  id: string; title: string; path: string; format: 'md' | 'txt' | 'json' | 'ts' | 'py' | 'js';
+  createdAt: string; chunkCount: number; tokenCount: number; lineCount: number;
+};
+type KnowledgeStats = { documentCount: number; chunkCount: number; totalTokens: number; avgChunkTokens: number };
 type Audit = { id: string; at: string; action: string; detail: string };
-type Proposal = { id: string; tool: string; args: { title: string; content: string }; expiresAt: number };
+type Proposal = { id: string; tool: string; args: { title: string; content: string; path?: string }; expiresAt: number };
+type Telemetry = {
+  rssMB: number; heapUsedMB: number; maxModelGiB: number;
+  profiles: {
+    fast: { contextTokens: number; maxOutputTokens: number };
+    balanced: { contextTokens: number; maxOutputTokens: number };
+    voice: { contextTokens: number; maxOutputTokens: number };
+  };
+};
 type Health = {
   status: string; provider: { connected: boolean; models: string[]; error?: string };
-  voice: { configured: boolean }; memory: { count: number }; audit?: { available: boolean }; activeModel: string;
+  voice: { configured: boolean }; memory: { count: number };
+  knowledge?: KnowledgeStats; telemetry?: Telemetry;
+  audit?: { available: boolean }; activeModel: string;
 };
 type Metrics = { ttftMs: number | null; totalMs: number; tokensPerSecond?: number; outputTokens?: number };
-type Event = { type: string; text?: string; message?: string; name?: string; result?: string; proposal?: Proposal } & Partial<Metrics>;
+type Event = {
+  type: string; text?: string; message?: string; name?: string; result?: string;
+  proposal?: Proposal; citations?: Citation[]; retrievalMs?: number;
+} & Partial<Metrics>;
+
 const pages = [
   { id: 'conversation', label: 'Conversation', icon: MessageSquare },
+  { id: 'knowledge', label: 'Knowledge base', icon: Database },
   { id: 'memory', label: 'Memory', icon: BookOpen },
   { id: 'tools', label: 'Tool library', icon: Wrench },
   { id: 'settings', label: 'Preferences', icon: Settings2 },
@@ -58,12 +82,23 @@ export default function App() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [toolsEnabled, setToolsEnabled] = useState(true);
+  const [useKnowledge, setUseKnowledge] = useState(false);
   const [speak, setSpeak] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const speechQueue = useRef<SentenceSpeaker | null>(null);
   const [speechActive, setSpeechActive] = useState(false);
   const [localVoice, setLocalVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDoc[]>([]);
+  const [knowledgeStats, setKnowledgeStats] = useState<KnowledgeStats>({ documentCount: 0, chunkCount: 0, totalTokens: 0, avgChunkTokens: 0 });
+  const [docTitle, setDocTitle] = useState('');
+  const [docPath, setDocPath] = useState('');
+  const [docFormat, setDocFormat] = useState<'md' | 'txt' | 'json' | 'ts' | 'py' | 'js'>('md');
+  const [docContent, setDocContent] = useState('');
+  const [indexingDoc, setIndexingDoc] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Citation[]>([]);
+  const [searchLatencyMs, setSearchLatencyMs] = useState<number | null>(null);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -83,7 +118,6 @@ export default function App() {
   const recordTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const scrollEnd = useRef<HTMLDivElement>(null);
-  const speaking = useRef(false);
   const streamFrame = useRef<number | null>(null);
   const followTail = useRef(true);
   const navigation = useRef<HTMLElement>(null);
@@ -116,12 +150,21 @@ export default function App() {
       const response = await request('/api/health');
       if (!response.ok) throw new Error('Could not connect to the local service.');
       const data: Health = await response.json(); setHealth(data);
+      if (data.knowledge) setKnowledgeStats(data.knowledge);
       setModel(current => data.provider.models.includes(current) ? current : data.provider.models.includes(data.activeModel) ? data.activeModel : data.provider.models[0] || '');
     } catch { setHealth(null); }
   }, [request]);
   const loadNotes = useCallback(async () => {
     try { const response = await request('/api/notes'); setNotes((await response.json()).notes); }
     catch (cause) { setError((cause as Error).message); }
+  }, [request]);
+  const loadKnowledge = useCallback(async () => {
+    try {
+      const response = await request('/api/knowledge');
+      const data = await response.json();
+      setKnowledgeDocs(data.documents || []);
+      if (data.stats) setKnowledgeStats(data.stats);
+    } catch (cause) { setError((cause as Error).message); }
   }, [request]);
   const loadAudit = useCallback(async () => {
     try { const response = await request('/api/audit'); setAudit((await response.json()).events); }
@@ -134,9 +177,10 @@ export default function App() {
     return () => clearInterval(timer);
   }, [session, refresh]);
   useEffect(() => {
+    if (page === 'knowledge') void loadKnowledge();
     if (page === 'memory') void loadNotes();
     if (page === 'tools') void loadAudit();
-  }, [page, loadNotes, loadAudit]);
+  }, [page, loadKnowledge, loadNotes, loadAudit]);
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
     const update = () => setLocalVoice(window.speechSynthesis.getVoices().find(voice => voice.localService && voice.lang.startsWith('en')) || window.speechSynthesis.getVoices().find(voice => voice.localService) || null);
@@ -189,6 +233,38 @@ export default function App() {
     stopSpeech(); captureGeneration.current++; capture.current?.dispose(); capture.current = null;
     setRecording(false); if(recordTimer.current) clearInterval(recordTimer.current); setVoiceOpen(true);
   }
+  async function indexDocument(event: FormEvent) {
+    event.preventDefault();
+    if (!docTitle.trim() || !docContent.trim() || indexingDoc) return;
+    setIndexingDoc(true); setError('');
+    try {
+      const payload: Record<string, string> = { title: docTitle.trim(), format: docFormat, content: docContent.trim() };
+      if (docPath.trim()) payload.path = docPath.trim();
+      await request('/api/knowledge/documents', { method: 'POST', body: JSON.stringify(payload) });
+      setDocTitle(''); setDocPath(''); setDocContent('');
+      await loadKnowledge(); void refresh();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setIndexingDoc(false); }
+  }
+  async function removeKnowledgeDoc(id: string) {
+    setError('');
+    try {
+      await request(`/api/knowledge/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadKnowledge(); void refresh();
+    } catch (cause) { setError((cause as Error).message); }
+  }
+  async function runKnowledgeSearch(event?: FormEvent) {
+    event?.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) { setSearchResults([]); setSearchLatencyMs(null); return; }
+    setError('');
+    try {
+      const response = await request('/api/knowledge/search', { method: 'POST', body: JSON.stringify({ query: q, limit: 6 }) });
+      const data = await response.json();
+      setSearchResults(data.citations || []);
+      setSearchLatencyMs(data.retrievalMs ?? null);
+    } catch (cause) { setError((cause as Error).message); }
+  }
   async function send(event?: FormEvent) {
     event?.preventDefault();
     const content = input.trim(); if (!content || busy || recording || transcribing || startingRecording) return;
@@ -207,23 +283,28 @@ export default function App() {
     const spoken = speak && localVoice ? new SentenceSpeaker(localVoice, 1.08, setSpeechActive) : null;
     speechQueue.current?.cancel(); speechQueue.current = spoken;
     let answer = ''; let receivedAction = false; let answerDirty = false;
+    let answerCitations: Citation[] | undefined; let answerRetrievalMs: number | undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     const publishAnswer = () => {
       if (streamFrame.current !== null) cancelAnimationFrame(streamFrame.current);
       streamFrame.current = null;
       if (!answerDirty || !mounted.current) return;
-      answerDirty = false; const content = answer;
-      setMessages(current => current.map(message => message.id === answerId ? { ...message, content } : message));
+      answerDirty = false; const nextContent = answer;
+      setMessages(current => current.map(message => message.id === answerId ? { ...message, content: nextContent, ...(answerCitations ? { citations: answerCitations, retrievalMs: answerRetrievalMs } : {}) } : message));
     };
     try {
       const response = await request('/api/chat', { method: 'POST', signal: controller.signal,
-        body: JSON.stringify({ model, profile, toolsEnabled, messages: history.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ model, profile, toolsEnabled, useKnowledge, messages: history.map(({ role, content }) => ({ role, content })) }),
       });
       if (!response.body) throw new Error('This browser cannot read a streaming response.');
       reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
       const consume = (line: string) => {
         if (!line.trim()) return;
         const event: Event = JSON.parse(line);
+        if (event.type === 'citations' && event.citations) {
+          answerCitations = event.citations; answerRetrievalMs = event.retrievalMs; answerDirty = true;
+          if (streamFrame.current === null) streamFrame.current = requestAnimationFrame(publishAnswer);
+        }
         if (event.type === 'token') {
           if (!receivedAction) setStatus('Thinking with you');
           receivedAction = true; answer += event.text || ''; answerDirty = true; spoken?.push(event.text || '');
@@ -337,7 +418,7 @@ export default function App() {
       <button className="new-chat" onClick={() => { clearConversation(); navigate('conversation'); }} disabled={busy}><Plus size={16} /> New conversation <span>+</span></button>
       <div className="nav-heading">YOUR WORKSPACE</div>
       <nav aria-label="Main navigation">
-        {pages.map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon size={17} strokeWidth={1.6} /><span>{item.label}</span>{item.id === 'memory' && Boolean(health?.memory.count) && <span className="nav-count">{health?.memory.count}</span>}{page === item.id && <i className="nav-dot" />}</button>)}
+        {pages.map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'selected' : ''}`} onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon size={17} strokeWidth={1.6} /><span>{item.label}</span>{item.id === 'knowledge' && Boolean(knowledgeStats.documentCount) && <span className="nav-count">{knowledgeStats.documentCount}</span>}{item.id === 'memory' && Boolean(health?.memory.count) && <span className="nav-count">{health?.memory.count}</span>}{page === item.id && <i className="nav-dot" />}</button>)}
       </nav>
       <div className="sidebar-note"><span className="tiny-plus">✧</span><p>Good things happen<br />when you have room<br /><em>to think.</em></p><div className="note-rule" /></div>
       <div className="sidebar-bottom">
@@ -347,7 +428,7 @@ export default function App() {
     </aside>
     <div className="workspace" inert={sidebar || undefined}>
       <header className="topbar">
-        <div className="breadcrumb"><button ref={menuButton} className="icon-button mobile-menu" aria-label="Open navigation" aria-expanded={sidebar} aria-controls="workspace-navigation" onClick={() => setSidebar(true)}><PanelLeftOpen size={19} /></button><span>Personal workspace</span><span className="breadcrumb-slash">/</span><strong>{page === 'conversation' ? 'Conversation' : page === 'tools' ? 'Tool library' : page === 'settings' ? 'Preferences' : 'Memory'}</strong></div>
+        <div className="breadcrumb"><button ref={menuButton} className="icon-button mobile-menu" aria-label="Open navigation" aria-expanded={sidebar} aria-controls="workspace-navigation" onClick={() => setSidebar(true)}><PanelLeftOpen size={19} /></button><span>Personal workspace</span><span className="breadcrumb-slash">/</span><strong>{page === 'conversation' ? 'Conversation' : page === 'knowledge' ? 'Knowledge base' : page === 'tools' ? 'Tool library' : page === 'settings' ? 'Preferences' : 'Memory'}</strong></div>
         <div className="topbar-actions"><span className={`connection ${connected ? 'connected' : ''}`}><span className="status-dot" />{connected ? 'Running locally' : health ? 'Ollama offline' : 'Connecting locally'}</span><span className="topbar-divider" /><button className="icon-button" aria-label="Refresh local connection" title="Refresh connection" onClick={() => { void refresh(); setError(''); }}><RefreshCw size={15} /></button></div>
       </header>
       <main className={`main-layout ${page !== 'conversation' ? 'full-page' : ''}`}>
@@ -362,9 +443,9 @@ export default function App() {
                 <p className="welcome-description">Think out loud. Follow a spark. Make something yours.<br />Your personal AI, right here on your Mac.</p>
                 <button className="welcome-talk" onClick={openVoice}><AudioLines size={19}/> Let’s talk <ArrowUpRight size={16}/></button><div className="starter-grid">{starters.map(item => <button className="starter-card" key={item.tag} onClick={() => { setInput(item.prompt); composer.current?.focus(); }}><span className="starter-top"><item.icon size={17} strokeWidth={1.5} /><ArrowUpRight size={14} /></span><span className="starter-tag">{item.tag}</span><strong>{item.title}</strong></button>)}</div>
               </div>}
-              {messages.length > 0 && <div className="message-list">{messages.map(message => <article className={`message ${message.role}`} key={message.id}><div className="message-avatar">{message.role === 'assistant' ? <Brand small /> : 'You'}</div><div className="message-body"><div className="message-label">{message.role === 'assistant' ? 'Auralis' : 'You'}{message.role === 'assistant' && <span>ON DEVICE</span>}</div>{message.content ? <><div className="message-text">{message.content}</div>{message.role === 'assistant' && <button className="message-listen" onClick={()=>say(message.content)} disabled={!localVoice || busy}><Volume2 size={12}/> Read aloud</button>}</> : <div className="thinking-dots" aria-label="Waiting for model"><i /><i /><i /></div>}</div></article>)}
+              {messages.length > 0 && <div className="message-list">{messages.map(message => <article className={`message ${message.role}`} key={message.id}><div className="message-avatar">{message.role === 'assistant' ? <Brand small /> : 'You'}</div><div className="message-body"><div className="message-label">{message.role === 'assistant' ? 'Auralis' : 'You'}{message.role === 'assistant' && <span>ON DEVICE</span>}{message.citations && message.citations.length > 0 && <span>GROUNDED · {message.citations.length} {message.citations.length === 1 ? 'CITATION' : 'CITATIONS'}</span>}</div>{message.content ? <><div className="message-text">{message.content}</div>{message.citations && message.citations.length > 0 && <div className="citation-strip" aria-label="Retrieved local sources">{message.citations.map(cit => <div className="citation-pill" key={cit.chunkId}><strong>{cit.path}#L{cit.startLine}–L{cit.endLine}</strong><span>score {cit.score.toFixed(2)} · {cit.matchedTerms.join(', ')}</span><p>{cit.snippet}</p></div>)}</div>}{message.role === 'assistant' && <button className="message-listen" onClick={()=>say(message.content)} disabled={!localVoice || busy}><Volume2 size={12}/> Read aloud</button>}</> : <div className="thinking-dots" aria-label="Waiting for model"><i /><i /><i /></div>}</div></article>)}
                 {busy && <div className="stream-status" role="status"><span className="status-dot" />{status || 'Working locally'}<button onClick={() => abort.current?.abort()}>Stop <Square size={10} /></button></div>}
-                {proposals.map(proposal => <div className="approval-card" key={proposal.id}><div className="approval-heading"><ShieldCheck size={18} /><div><strong>A little permission first</strong><span>Auralis wants to save a memory on this Mac.</span></div></div><div className="approval-preview"><strong>{proposal.args.title}</strong><p>{proposal.args.content}</p></div><div className="approval-actions"><small>{Date.now() >= proposal.expiresAt ? 'This request expired. Start a new conversation to try again.' : 'Only this exact note will be saved.'}</small><button className="button secondary" onClick={() => void decide(proposal, false)} disabled={Boolean(decision)}>Decline</button><button className="button primary" onClick={() => void decide(proposal, true)} disabled={Boolean(decision) || Date.now() >= proposal.expiresAt}>{decision === proposal.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />}Save memory</button></div></div>)}
+                {proposals.map(proposal => <div className="approval-card" key={proposal.id}><div className="approval-heading"><ShieldCheck size={18} /><div><strong>A little permission first</strong><span>{proposal.tool === 'knowledge.index' ? 'Auralis wants to index a document into your local knowledge base.' : 'Auralis wants to save a memory on this Mac.'}</span></div></div><div className="approval-preview"><strong>{proposal.args.title}</strong><p>{proposal.args.content}</p></div><div className="approval-actions"><small>{Date.now() >= proposal.expiresAt ? 'This request expired. Start a new conversation to try again.' : 'Only this exact item will be saved.'}</small><button className="button secondary" onClick={() => void decide(proposal, false)} disabled={Boolean(decision)}>Decline</button><button className="button primary" onClick={() => void decide(proposal, true)} disabled={Boolean(decision) || Date.now() >= proposal.expiresAt}>{decision === proposal.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />}{proposal.tool === 'knowledge.index' ? 'Index document' : 'Save memory'}</button></div></div>)}
               </div>}
               <div ref={scrollEnd} />
             </div>
@@ -376,10 +457,51 @@ export default function App() {
               <form className={`composer ${recording ? 'is-recording' : ''}`} onSubmit={event => void send(event)}>
                 <label className="sr-only" htmlFor="message-input">Message Auralis</label>
                 <textarea ref={composer} id="message-input" placeholder={recording ? 'Listening to you…' : 'A thought, a question, a place to start…'} value={input} rows={2} maxLength={16000} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} disabled={recording || transcribing} />
-                <div className="composer-controls"><div className="composer-left"><button type="button" className={`composer-tool ${toolsEnabled ? 'enabled' : ''}`} onClick={() => setToolsEnabled(current => !current)} aria-pressed={toolsEnabled} title="Allow calculator and approval-gated memory tools"><Wrench size={14} /><span>Tools</span><span className="mini-dot" /></button><span className="composer-divider" /><button type="button" className="composer-tool" onClick={() => setProfile(current => current === 'fast' ? 'balanced' : 'fast')} title="Switch generation profile"><Zap size={13} /><span>{profile === 'fast' ? 'Fast' : 'Balanced'}</span><ChevronDown size={11} /></button></div><div className="composer-right"><button type="button" className={`icon-button voice-button ${recording ? 'recording' : ''}`} onClick={() => void toggleRecording()} disabled={busy || transcribing || startingRecording} aria-label={recording ? 'Stop recording and transcribe locally' : 'Record voice locally'} title={health?.voice.configured ? 'Dictate locally · 30 seconds maximum' : 'Set up local voice in Preferences'}>{transcribing || startingRecording ? <Loader2 size={18} className="spin" /> : recording ? <Square size={16} /> : <Mic size={18} />}</button>{busy ? <button className="send-button stop" type="button" aria-label="Stop generation" onClick={() => abort.current?.abort()}><Square size={15} /></button> : <button className="send-button" type="submit" aria-label="Send message" disabled={!input.trim() || recording || transcribing || startingRecording}><ArrowUp size={19} strokeWidth={2} /></button>}</div></div>
+                <div className="composer-controls"><div className="composer-left"><button type="button" className={`composer-tool ${toolsEnabled ? 'enabled' : ''}`} onClick={() => setToolsEnabled(current => !current)} aria-pressed={toolsEnabled} title="Allow calculator and approval-gated memory tools"><Wrench size={14} /><span>Tools</span><span className="mini-dot" /></button><span className="composer-divider" /><button type="button" className={`composer-tool ${useKnowledge ? 'enabled' : ''}`} onClick={() => setUseKnowledge(current => !current)} aria-pressed={useKnowledge} title="Ground chat with local knowledge base citations"><Database size={13} /><span>Knowledge</span><span className="mini-dot" /></button><span className="composer-divider" /><button type="button" className="composer-tool" onClick={() => setProfile(current => current === 'fast' ? 'balanced' : 'fast')} title="Switch generation profile"><Zap size={13} /><span>{profile === 'fast' ? 'Fast' : 'Balanced'}</span><ChevronDown size={11} /></button></div><div className="composer-right"><button type="button" className={`icon-button voice-button ${recording ? 'recording' : ''}`} onClick={() => void toggleRecording()} disabled={busy || transcribing || startingRecording} aria-label={recording ? 'Stop recording and transcribe locally' : 'Record voice locally'} title={health?.voice.configured ? 'Dictate locally · 30 seconds maximum' : 'Set up local voice in Preferences'}>{transcribing || startingRecording ? <Loader2 size={18} className="spin" /> : recording ? <Square size={16} /> : <Mic size={18} />}</button>{busy ? <button className="send-button stop" type="button" aria-label="Stop generation" onClick={() => abort.current?.abort()}><Square size={15} /></button> : <button className="send-button" type="submit" aria-label="Send message" disabled={!input.trim() || recording || transcribing || startingRecording}><ArrowUp size={19} strokeWidth={2} /></button>}</div></div>
               </form>
               <div className="composer-footnote"><span><ShieldCheck size={11} /> Just between you and your Mac.</span><span>AI can make mistakes. Stay curious.</span><span className="shortcut"><span>↵</span> to send</span></div>
             </div>
+          </>}
+          {page === 'knowledge' && <>
+            <div className="page-heading"><div className="eyebrow">LOCAL HYBRID RETRIEVAL · BM25 + PHRASE</div><h1>Your knowledge,<br /><em>grounded with citations.</em></h1><p>Index Markdown, notes, JSON, or code locally on your Mac. Search with deterministic BM25 ranking and exact line provenance—zero external cloud calls.</p></div>
+            {error && <div className="error-notice" role="alert"><CircleHelp size={16} /><p>{error}</p></div>}
+            <div className="knowledge-metrics-row">
+              <div className="knowledge-stat-card"><span>DOCUMENTS</span><strong>{knowledgeStats.documentCount}</strong><small>Max 200 local files</small></div>
+              <div className="knowledge-stat-card"><span>INDEXED CHUNKS</span><strong>{knowledgeStats.chunkCount}</strong><small>Line-ranged sections</small></div>
+              <div className="knowledge-stat-card"><span>INDEXED TOKENS</span><strong>{knowledgeStats.totalTokens}</strong><small>Avg {knowledgeStats.avgChunkTokens} tok/chunk</small></div>
+              <div className="knowledge-stat-card"><span>GROUNDING IN CHAT</span><strong>{useKnowledge ? 'Enabled' : 'Off'}</strong><small><button type="button" className="text-button" onClick={() => setUseKnowledge(v => !v)}>{useKnowledge ? 'Disable in chat' : 'Enable in chat'}</button></small></div>
+            </div>
+            <div className="knowledge-split">
+              <form className="knowledge-form" onSubmit={event => void indexDocument(event)}>
+                <div className="section-heading"><h2>Index a local document</h2></div>
+                <div className="knowledge-inputs">
+                  <input type="text" placeholder="Document title (e.g., System Architecture Notes)" value={docTitle} maxLength={160} onChange={e => setDocTitle(e.target.value)} required />
+                  <div className="knowledge-input-row">
+                    <input type="text" placeholder="Relative path (optional, e.g., docs/design.md)" value={docPath} maxLength={240} onChange={e => setDocPath(e.target.value)} />
+                    <select aria-label="Document format" value={docFormat} onChange={e => setDocFormat(e.target.value as KnowledgeDoc['format'])}>
+                      <option value="md">Markdown (.md)</option>
+                      <option value="txt">Plain text (.txt)</option>
+                      <option value="ts">TypeScript (.ts)</option>
+                      <option value="py">Python (.py)</option>
+                      <option value="js">JavaScript (.js)</option>
+                      <option value="json">JSON (.json)</option>
+                    </select>
+                  </div>
+                  <textarea placeholder="Paste Markdown, notes, or source code to chunk and index locally…" rows={6} maxLength={64000} value={docContent} onChange={e => setDocContent(e.target.value)} required />
+                  <button className="button primary" type="submit" disabled={indexingDoc || !docTitle.trim() || !docContent.trim()}>{indexingDoc ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Index into local knowledge base</button>
+                </div>
+              </form>
+              <div className="knowledge-search-panel">
+                <div className="section-heading"><h2>Test hybrid BM25 retrieval {searchLatencyMs != null && <span>{searchLatencyMs} ms</span>}</h2></div>
+                <form className="knowledge-search-bar" onSubmit={event => void runKnowledgeSearch(event)}>
+                  <input type="search" placeholder="Search indexed chunks and inspect line citations…" value={searchQuery} maxLength={500} onChange={e => setSearchQuery(e.target.value)} />
+                  <button className="button secondary" type="submit"><Search size={14} /> Search</button>
+                </form>
+                {searchResults.length > 0 ? <div className="citation-results">{searchResults.map(cit => <article className="citation-card" key={cit.chunkId}><div className="citation-header"><strong>{cit.path}#L{cit.startLine}–L{cit.endLine}</strong><span className="tag safe">SCORE {cit.score.toFixed(2)}</span></div>{cit.heading && <div className="citation-heading">Section: {cit.heading}</div>}<p>{cit.snippet}</p><small>Matched terms: {cit.matchedTerms.join(', ')}</small></article>)}</div> : <div className="small-empty"><Search size={18} /><p>Run a query above to preview ranked chunks, BM25 scores, and exact line ranges.</p></div>}
+              </div>
+            </div>
+            <div className="section-heading activity-heading"><h2>Indexed on this Mac <span>{knowledgeDocs.length}</span></h2><button className="text-button" onClick={() => void loadKnowledge()}><RefreshCw size={14} /> Refresh</button></div>
+            {!knowledgeDocs.length ? <div className="empty-state"><Database size={32} strokeWidth={1} /><h3>No documents indexed yet.</h3><p>Add Markdown notes, design docs, or source files above to enable citation-grounded answers.</p></div> : <div className="notes-grid">{knowledgeDocs.map(doc => <article className="note-card" key={doc.id}><div><span className="tag safe">{doc.format.toUpperCase()} · {doc.chunkCount} CHUNKS</span><button className="icon-button" aria-label={`Delete document: ${doc.title}`} onClick={() => void removeKnowledgeDoc(doc.id)}><Trash2 size={15} /></button></div><h3>{doc.title}</h3><p>{doc.path} · {doc.lineCount} lines · {doc.tokenCount} indexed tokens</p><small>{new Date(doc.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</small></article>)}</div>}
           </>}
           {page === 'memory' && <>
             <div className="page-heading"><div className="eyebrow">YOUR CONTEXT, YOUR CHOICE</div><h1>A memory<br />you <em>can see.</em></h1><p>Only notes you approve are saved. Review them here, and let go of anything that no longer fits.</p></div>
@@ -392,7 +514,7 @@ export default function App() {
             {health?.audit && !health.audit.available && <div className="error-notice" role="alert">The activity log could not be written. Check local storage permissions. Saved notes may still have succeeded.</div>}
             <div className="page-heading"><div className="eyebrow">A LITTLE HELP, WITH BOUNDARIES</div><h1>More capable.<br /><em>Still in your hands.</em></h1><p>Small, purpose-built tools. Clear permissions. Every action has a place in your local activity log.</p></div>
             <div className="tools-toggle-row"><div><strong>Tools in conversation</strong><p>Let your model request the tools below.</p></div><Toggle checked={toolsEnabled} onChange={() => setToolsEnabled(value => !value)} label="Enable tools in conversation" /></div>
-            <div className="tool-cards"><article className="tool-card"><div className="tool-icon"><Zap size={20} /></div><span className="tag safe">READ ONLY</span><h3>Calculator</h3><p>Work through arithmetic with a bounded expression parser. No code execution.</p><div className="tool-card-footer"><span className="status-dot" /> Available when tools are enabled</div></article><article className="tool-card"><div className="tool-icon"><BookOpen size={20} /></div><span className="tag approval">YOUR APPROVAL</span><h3>Save a memory</h3><p>A note for later, saved only after you review its exact title and content.</p><div className="tool-card-footer"><ShieldCheck size={13} /> Approval required for every note</div></article></div>
+            <div className="tool-cards"><article className="tool-card"><div className="tool-icon"><Zap size={20} /></div><span className="tag safe">READ ONLY</span><h3>Calculator</h3><p>Work through arithmetic with a bounded expression parser. No code execution.</p><div className="tool-card-footer"><span className="status-dot" /> Available when tools are enabled</div></article><article className="tool-card"><div className="tool-icon"><BookOpen size={20} /></div><span className="tag approval">YOUR APPROVAL</span><h3>Save a memory</h3><p>A note for later, saved only after you review its exact title and content.</p><div className="tool-card-footer"><ShieldCheck size={13} /> Approval required for every note</div></article><article className="tool-card"><div className="tool-icon"><Database size={20} /></div><span className="tag safe">LOCAL BM25 RAG</span><h3>Knowledge retrieval</h3><p>Deterministic chunking and hybrid BM25 + phrase scoring with line-number citations.</p><div className="tool-card-footer"><span className="status-dot" /> {knowledgeStats.chunkCount} chunks indexed locally</div></article><article className="tool-card"><div className="tool-icon"><ShieldCheck size={20} /></div><span className="tag approval">SANDBOXED</span><h3>Workspace inspector</h3><p>Read-only file inspection blocking dotfiles, symlinks, credentials, and path traversal.</p><div className="tool-card-footer"><ShieldCheck size={13} /> Explicit approval to index files</div></article></div>
             <div className="section-heading activity-heading"><h2>Local activity <span>{audit.length}</span></h2><button className="text-button" onClick={() => void loadAudit()}><RefreshCw size={14} /> Refresh</button></div>
             {error && <div className="error-notice" role="alert">{error}</div>}
             {audit.length ? <div className="audit-list">{audit.slice(0, 50).map(event => <div className="audit-event" key={event.id}><span className="audit-icon"><Activity size={14} /></span><div><strong>{event.action}</strong><p>{event.detail}</p></div><time>{new Date(event.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></div>)}</div> : <div className="small-empty"><Activity size={19} /><p>No recorded activity yet. Tool actions will appear here.</p></div>}
@@ -400,19 +522,19 @@ export default function App() {
           {page === 'settings' && <>
             <div className="page-heading"><div className="eyebrow">MAKE YOURSELF AT HOME</div><h1>Your assistant.<br /><em>Your way.</em></h1><p>Choose how Auralis thinks, speaks, and remembers. Everything starts with your privacy.</p></div>
             {error && <div className="error-notice" role="alert">{error}</div>}
-            <section className="settings-group"><div className="settings-section-title"><Sparkles size={16} /><h2>Intelligence</h2></div><div className="setting-row"><div><strong>Local model</strong><p>{connected ? 'Models discovered from your local Ollama service.' : 'Start Ollama and install a model to connect.'}</p></div><select className="setting-select" value={model} onChange={event => setModel(event.target.value)} aria-label="Choose language model" disabled={!modelOptions.length}>{!modelOptions.length && <option>No installed models</option>}{modelOptions.map(name => <option key={name}>{name}</option>)}</select></div><div className="setting-row"><div><strong>Generation profile</strong><p>Fast uses a smaller context to keep memory use light.</p></div><div className="segmented"><button className={profile === 'fast' ? 'active' : ''} onClick={() => setProfile('fast')}>Fast</button><button className={profile === 'balanced' ? 'active' : ''} onClick={() => setProfile('balanced')}>Balanced</button></div></div></section>
+            <section className="settings-group"><div className="settings-section-title"><Sparkles size={16} /><h2>Intelligence</h2></div><div className="setting-row"><div><strong>Local model</strong><p>{connected ? 'Models discovered from your local Ollama service.' : 'Start Ollama and install a model to connect.'}</p></div><select className="setting-select" value={model} onChange={event => setModel(event.target.value)} aria-label="Choose language model" disabled={!modelOptions.length}>{!modelOptions.length && <option>No installed models</option>}{modelOptions.map(name => <option key={name}>{name}</option>)}</select></div><div className="setting-row"><div><strong>Generation profile</strong><p>Fast uses a smaller context to keep memory use light.</p></div><div className="segmented"><button className={profile === 'fast' ? 'active' : ''} onClick={() => setProfile('fast')}>Fast</button><button className={profile === 'balanced' ? 'active' : ''} onClick={() => setProfile('balanced')}>Balanced</button></div></div><div className="setting-row"><div><strong>Ground chat with local knowledge</strong><p>Automatically retrieve top BM25 citations from your indexed documents during chat.</p></div><Toggle checked={useKnowledge} onChange={() => setUseKnowledge(value => !value)} label="Ground chat with local knowledge" /></div></section>
             <section className="settings-group"><div className="settings-section-title"><AudioLines size={16} /><h2>Voice</h2></div><div className="setting-row"><div><strong>Speak responses</strong><p>{localVoice ? `On-device voice: ${localVoice.name}. Speaks sentence by sentence while the reply arrives.` : 'No installed local speech voice detected in this browser.'}</p></div><Toggle checked={speak} onChange={() => { setSpeak(value => !value); if (speak) window.speechSynthesis?.cancel(); }} label="Speak responses using an installed local voice" disabled={!localVoice} /></div><div className="setting-row"><div><strong>Local dictation</strong><p>{health?.voice.configured ? 'The local transcription adapter is configured. Microphone opens only when you press record.' : 'Run npm run voice:setup for local dictation. See docs/voice.md for the start commands.'}</p></div><span className={`tag ${health?.voice.configured ? 'safe' : ''}`}>{health?.voice.configured ? 'CONFIGURED' : 'SETUP NEEDED'}</span></div></section>
             <section className="settings-group"><div className="settings-section-title"><ShieldCheck size={16} /><h2>Privacy & control</h2></div><div className="setting-row"><div><strong>Conversation history</strong><p>This chat lives in memory for this browser session. Export only when you choose.</p></div><span className="tag safe">SESSION ONLY</span></div><div className="setting-row"><div><strong>Model tools</strong><p>Calculator is bounded. Saving a note needs your approval.</p></div><Toggle checked={toolsEnabled} onChange={() => setToolsEnabled(value => !value)} label="Allow model tools" /></div><div className="setting-row"><div><strong>Current conversation</strong><p>Export a copy, or clear the messages from this session.</p></div><div className="setting-buttons"><button className="button secondary" onClick={exportConversation} disabled={!messages.length}><ArrowDownToLine size={14} /> Export</button><button className="button secondary danger" onClick={clearConversation} disabled={busy || !messages.length}><Trash2 size={14} /> Clear</button></div></div></section>
-            <div className="about-card"><Brand /><div><strong>Auralis <span>0.1</span></strong><p>An independent, local-first assistant.<br />Built for a little more clarity, and a lot more ownership.</p></div><span className="about-local"><ShieldCheck size={14} /> LOCAL FIRST</span></div>
+            <div className="about-card"><Brand /><div><strong>Auralis <span>0.2</span></strong><p>An independent, local-first assistant.<br />Built for a little more clarity, and a lot more ownership.</p></div><span className="about-local"><ShieldCheck size={14} /> LOCAL FIRST</span></div>
           </>}
         </section>
         {page === 'conversation' && <aside className="inspector" aria-label="Session information">
           <div className="inspector-heading"><span>BEHIND THE MOMENT</span><Activity size={14} /></div>
           <div className="inspector-status"><span className={`status-orbit ${connected ? 'ready' : ''}`}><i /></span><div><strong>{recording ? 'Listening, locally' : busy ? 'Thinking with you' : modelReady ? 'Here when you need me' : 'Waiting for your model'}</strong><span>{recording ? 'Microphone is active' : busy ? status : modelReady ? 'Your local model is ready' : connected ? 'Install a model in Ollama to begin' : 'Connect Ollama to begin'}</span></div></div>
           <div className="inspector-divider" />
-          <div className="inspector-section"><span className="section-kicker">THE SETUP</span><dl><div><dt>Inference</dt><dd>Ollama <span className={`micro-dot ${connected ? 'green' : ''}`} /></dd></div><div><dt>Model</dt><dd className="model-value" title={modelLabel}>{modelLabel}</dd></div><div><dt>Profile</dt><dd>{profile === 'fast' ? 'Fast & light' : 'Balanced'}</dd></div><div><dt>Tools</dt><dd>{toolsEnabled ? 'Available' : 'Off'}</dd></div></dl></div>
+          <div className="inspector-section"><span className="section-kicker">THE SETUP</span><dl><div><dt>Inference</dt><dd>Ollama <span className={`micro-dot ${connected ? 'green' : ''}`} /></dd></div><div><dt>Model</dt><dd className="model-value" title={modelLabel}>{modelLabel}</dd></div><div><dt>Profile</dt><dd>{profile === 'fast' ? 'Fast (2k ctx)' : 'Balanced (4k ctx)'}</dd></div><div><dt>Knowledge</dt><dd>{useKnowledge ? `Grounded (${knowledgeStats.chunkCount})` : 'Off'}</dd></div><div><dt>Tools</dt><dd>{toolsEnabled ? 'Available' : 'Off'}</dd></div></dl></div>
           <div className="inspector-divider" />
-          <div className="inspector-section"><span className="section-kicker">THIS CONVERSATION</span><dl><div><dt>Messages</dt><dd>{messages.filter(message => message.content).length.toString().padStart(2, '0')}</dd></div><div><dt>First response</dt><dd>{metrics?.ttftMs != null ? `${(metrics.ttftMs / 1000).toFixed(2)} s` : '—'}</dd></div><div><dt>Generation</dt><dd>{metrics?.tokensPerSecond ? `${metrics.tokensPerSecond.toFixed(1)} tok/s` : '—'}</dd></div></dl>{!metrics && <p className="metrics-note">Measured here, after your first response.</p>}</div>
+          <div className="inspector-section"><span className="section-kicker">SYSTEM & BENCHMARK TELEMETRY</span><dl><div><dt>Node RSS</dt><dd>{health?.telemetry ? `${health.telemetry.rssMB} MB` : '—'}</dd></div><div><dt>Weight guard</dt><dd>≤ {health?.telemetry?.maxModelGiB ?? 8} GiB</dd></div><div><dt>First response</dt><dd>{metrics?.ttftMs != null ? `${(metrics.ttftMs / 1000).toFixed(2)} s` : '—'}</dd></div><div><dt>Generation</dt><dd>{metrics?.tokensPerSecond ? `${metrics.tokensPerSecond.toFixed(1)} tok/s` : '—'}</dd></div></dl>{!metrics && <p className="metrics-note">Measured here, after your first response.</p>}</div>
           <div className="inspector-divider" />
           <div className="inspector-section"><span className="section-kicker">A CLEAR BOUNDARY</span><ul className="privacy-checks"><li><Check size={12} /> No cloud fallback</li><li><Check size={12} /> No background listening</li><li><Check size={12} /> You approve saved memory</li></ul></div>
           <div className="privacy-card"><ShieldCheck size={22} strokeWidth={1.3} /><strong>Closer to you.<br />Further from the cloud.</strong><p>Conversations stay in this session. Your model runs on your Mac.</p><button onClick={() => navigate('settings')}>Your privacy controls <ArrowUpRight size={13} /></button></div>

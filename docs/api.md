@@ -49,11 +49,23 @@ Event shapes:
 ```ts
 { type: 'token', text: string }
 { type: 'status', text: string }
+{ type: 'citations', citations: Array<{
+  chunkId: string,
+  documentId: string,
+  title: string,
+  path: string,
+  heading?: string,
+  startLine: number,
+  endLine: number,
+  snippet: string,
+  score: number,
+  matchedTerms: string[]
+}>, retrievalMs: number }
 { type: 'tool', name: string, result: string }
 { type: 'proposal', proposal: {
   id: string,
-  tool: 'note.save',
-  args: { title: string, content: string },
+  tool: 'note.save' | 'knowledge.index',
+  args: { title: string, content: string, path?: string, format?: string },
   expiresAt: number
 } }
 { type: 'metrics', ttftMs: number | null, totalMs: number,
@@ -67,6 +79,35 @@ Event shapes:
 Once streaming begins, an error may arrive as an event rather than an HTTP error status. Treat it as a failure even if the HTTP status was successful. A completed stream is not evidence that the answer is correct. Abort the fetch to cancel.
 
 The application admits one active inference operation (chat or transcription). JSON bodies are bounded to 256 KiB. Chat accepts 1–40 messages, at most 16,000 characters per message and 64,000 characters total. Profiles constrain the model context separately; character limits are not token limits. Output generation is bounded to 1,024 tokens per model step, with at most four model steps and at most four tool calls per step. A pending note proposal ends that generation; approval writes the note without silently starting another chat.
+
+## `GET /api/knowledge`
+
+Returns `{ "documents": [...], "stats": { "documentCount": 0, "chunkCount": 0, "totalTokens": 0, "avgChunkTokens": 0 } }`. Document metadata includes `id`, `title`, `path`, `format`, `createdAt`, `chunkCount`, `tokenCount`, and `lineCount`.
+
+## `POST /api/knowledge/documents`
+
+Indexes a document (`.md`, `.txt`, `.json`, `.ts`, `.py`, `.js`, up to 64,000 characters, max 200 documents) into `knowledge.json` using deterministic line-aware chunking:
+
+```json
+{
+  "title": "System Architecture",
+  "path": "docs/architecture.md",
+  "format": "md",
+  "content": "# Architecture\nAuralis binds to 127.0.0.1."
+}
+```
+
+## `POST /api/knowledge/search`
+
+Queries the local hybrid BM25 + phrase scoring engine (`limit` 1–20, default 5) and returns `{ "citations": [...], "retrievalMs": 0.25, "stats": { ... } }`.
+
+## `DELETE /api/knowledge/documents/:id`
+
+Removes an indexed document and rebuilds the in-memory chunk index.
+
+## `GET /api/workspace/files` and `POST /api/workspace/inspect`
+
+`GET /api/workspace/files` lists readable non-hidden text/code files inside the workspace root. `POST /api/workspace/inspect` accepts `{ "path": "docs/setup.md", "proposeIndex": true }`, blocks `..`, symlinks, dotfiles, `node_modules`, and credential files, and optionally creates a single-use `knowledge.index` approval proposal.
 
 ## `GET /api/notes`
 
