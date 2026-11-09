@@ -1,9 +1,10 @@
 {
   "name": "auralis-local",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A deliberate, private AI workspace for Apple Silicon.",
+  "author": "Akandwanaho Ivan Alvin <codesphereinnovationz@gmail.com>",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:ui\"",
     "dev:api": "AURALIS_DEV=1 tsx watch server/index.ts",
@@ -13,6 +14,7 @@
     "test": "tsx --test tests/*.test.ts",
     "check": "npm test && npm run build",
     "benchmark": "tsx scripts/benchmark.ts",
+    "benchmark:memory": "tsx scripts/benchmark.ts --memory-profile",
     "voice:setup": "uv run --python 3.12 scripts/voice_service.py --setup",
     "voice:start": "uv run --offline --python 3.12 scripts/voice_service.py",
     "start:voice": "WHISPER_URL=http://127.0.0.1:8080/inference tsx server/index.ts",

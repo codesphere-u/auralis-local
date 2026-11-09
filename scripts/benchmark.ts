@@ -5,6 +5,7 @@ import { Ollama, parseNDJSON } from '../server/provider.ts';
 import { configFromEnv } from '../server/config.ts';
 import { KnowledgeBase } from '../server/knowledge.ts';
 import { calculate } from '../server/calculator.ts';
+import { profileContextWindowMemoryPressure } from './memory_profiler.ts';
 
 function percentile(sorted: number[], p: number): number {
   if (!sorted.length) return 0;
@@ -99,10 +100,28 @@ export async function runLocalPipelineBenchmark() {
   }
 }
 
+export async function runMemoryPressureBenchmark() {
+  const profile4k = await profileContextWindowMemoryPressure(4096);
+  const profile8k = await profileContextWindowMemoryPressure(8192);
+  return {
+    benchmark: 'm-series-memory-profile',
+    hardware: profile4k.hardware,
+    profile4k,
+    profile8k,
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const localOnly = args.includes('--local-only');
+  const memoryProfileOnly = args.includes('--memory-profile');
   const modelArgs = args.filter(a => !a.startsWith('--'));
+
+  if (memoryProfileOnly) {
+    const memResult = await runMemoryPressureBenchmark();
+    console.log(JSON.stringify(memResult));
+    return;
+  }
 
   const pipelineResult = await runLocalPipelineBenchmark();
   console.log(JSON.stringify(pipelineResult));

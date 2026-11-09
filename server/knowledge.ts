@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Store } from './store.ts';
 
-export const SUPPORTED_FORMATS = ['md', 'txt', 'json', 'ts', 'py', 'js'] as const;
+export const SUPPORTED_FORMATS = ['md', 'txt', 'json', 'ts', 'py', 'js', 'pdf'] as const;
 export type KnowledgeFormat = (typeof SUPPORTED_FORMATS)[number];
 
 export const knowledgeDocArgs = z.object({
@@ -102,6 +102,9 @@ function detectHeading(line: string, format: KnowledgeFormat): string | undefine
   } else if (format === 'py') {
     const match = trimmed.match(/^(?:async\s+)?(?:def|class)\s+([a-zA-Z0-9_]+)/);
     if (match) return match[1];
+  } else if (format === 'pdf') {
+    const match = trimmed.match(/^(?:(?:[0-9]+\.)+|Section\s+[0-9]+|#{1,4})\s+(.+)$/i);
+    if (match) return match[1].trim().slice(0, 120);
   }
   return undefined;
 }

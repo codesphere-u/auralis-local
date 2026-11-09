@@ -2,6 +2,22 @@
 
 All notable changes to Auralis are documented in this file.
 
+## [0.3.0] - 2026-11-09
+
+### Added
+- **Local PDF Text Extraction Engine (`server/pdf.ts`)**:
+  - Zero-dependency, offline PDF content stream parser extracting text from `Tj`, `TJ`, `'`, and `"` operators within `BT ... ET` text blocks.
+  - Built-in decompression for `/FlateDecode` streams via `node:zlib` (`inflateSync`/`inflateRawSync`) and full support for hex strings, kerning spacing arrays, and octal/escape literals (Closes #1).
+- **Guarded Workspace PDF Indexing (`server/workspace.ts`, `server/knowledge.ts`)**:
+  - Support for `.pdf` documents within the guarded workspace inspector and BM25 hybrid knowledge base.
+  - Strict preservation of path-traversal safeguards, size limits, and human-approval proposals (`knowledge.index`).
+- **Apple Silicon M-Series Memory Pressure Profiler (`scripts/memory_profiler.ts`, `scripts/benchmark.ts`)**:
+  - Live query engine for macOS `vm_stat` measuring 16 KiB unified memory pages (active, wired, compressed, and free memory).
+  - Automated profiling comparing physical RSS delta, translation page faults, and compressor engagement across 4,096 (4K) vs 8,192 (8K) context windows (Closes #2).
+  - Added `npm run benchmark:memory` CLI runner.
+- **Test Suite**:
+  - Expanded test suite from 36 to 47 passing tests across all modules.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

@@ -1,6 +1,7 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import type { KnowledgeFormat } from './knowledge.ts';
+import { extractTextFromPdfBuffer } from './pdf.ts';
 
 const ALLOWED_EXTENSIONS = new Map<string, KnowledgeFormat>([
   ['.md', 'md'],
@@ -10,6 +11,7 @@ const ALLOWED_EXTENSIONS = new Map<string, KnowledgeFormat>([
   ['.tsx', 'ts'],
   ['.py', 'py'],
   ['.js', 'js'],
+  ['.pdf', 'pdf'],
 ]);
 
 const BLOCKED_SEGMENTS = new Set([
@@ -67,7 +69,7 @@ export function validateWorkspacePath(relativePath: string): { normalized: strin
   const ext = extname(trimmed).toLowerCase();
   const format = ALLOWED_EXTENSIONS.get(ext);
   if (!format) {
-    throw new Error('Unsupported file extension. Allowed formats: .md, .txt, .json, .ts, .tsx, .py, .js.');
+    throw new Error('Unsupported file extension. Allowed formats: .md, .txt, .json, .ts, .tsx, .py, .js, .pdf.');
   }
   return { normalized: segments.join('/'), format };
 }
@@ -105,10 +107,15 @@ export function inspectWorkspaceFile(rootDir: string, relativePath: string, maxB
   }
 
   const buffer = readFileSync(realTarget);
-  if (buffer.includes(0)) {
-    throw new Error('Binary files cannot be inspected or indexed.');
+  let content: string;
+  if (format === 'pdf') {
+    content = extractTextFromPdfBuffer(buffer);
+  } else {
+    if (buffer.includes(0)) {
+      throw new Error('Binary files cannot be inspected or indexed.');
+    }
+    content = buffer.toString('utf8');
   }
-  const content = buffer.toString('utf8');
   const lines = content.replace(/\r\n/g, '\n').split('\n');
   return {
     path: normalized,
