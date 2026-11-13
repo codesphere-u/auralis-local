@@ -21,3 +21,13 @@ jobs:
       - run: npm run check
       - name: Audit production dependencies
         run: npm audit --omit=dev
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t auralis-local:ci .
+      - name: Verify non-root container & tsx runtime
+        run: |
+          docker run --rm auralis-local:ci node -e "if (process.getuid && process.getuid() === 0) process.exit(1)"
+          docker run --rm auralis-local:ci ./node_modules/.bin/tsx --version
