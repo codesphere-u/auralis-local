@@ -7,12 +7,12 @@ import argparse
 import io
 import json
 import os
-from pathlib import Path
 import threading
 import wave
 from email.parser import BytesParser
 from email.policy import default
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / ".auralis" / "voice"
 os.environ["HF_HOME"] = str(ROOT / "cache")
@@ -107,7 +107,7 @@ def main():
                 self.reply(200, {"text": text[:16000]})
             except (ValueError, wave.Error):
                 self.reply(400, {"error": "Invalid audio"})
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.reply(500, {"error": "Local transcription failed"})
             finally:
                 lock.release()

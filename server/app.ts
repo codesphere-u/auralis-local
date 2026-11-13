@@ -41,7 +41,11 @@ async function json(req:IncomingMessage):Promise<unknown> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new HttpError(415,'Expected application/json');
   try {return JSON.parse((await body(req)).toString('utf8'));} catch(e) {if(e instanceof HttpError) throw e;throw new HttpError(400,'Invalid JSON');}
 }
-function send(res:ServerResponse,status:number,value:unknown) {res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(value));}
+function send(res:ServerResponse,status:number,value:unknown,isHead=false) {
+  const payload = JSON.stringify(value);
+  res.writeHead(status,{'content-type':'application/json','content-length':Buffer.byteLength(payload)});
+  res.end(isHead ? undefined : payload);
+}
 
 export function createApp(config:Config, provider = new Ollama(config.ollama), workspaceRoot = process.cwd()) {
   const store = new Store(config.dataDir);
@@ -79,7 +83,7 @@ export function createApp(config:Config, provider = new Ollama(config.ollama), w
         if(!['GET','HEAD'].includes(req.method||'')) {
           if(!origin || !origins.has(origin) || req.headers['x-auralis-csrf']!==session.csrf) throw new HttpError(403,'Invalid request verification token');
         }
-        if(path==='/api/health' && req.method==='GET') {
+        if(path==='/api/health' && ['GET','HEAD'].includes(req.method||'')) {
           let models:string[]=[];let error:string|undefined;
           try{models=await provider.models();}catch{error='Ollama is unavailable. Start Ollama to connect.';}
           const mem = process.memoryUsage();
@@ -101,7 +105,7 @@ export function createApp(config:Config, provider = new Ollama(config.ollama), w
             },
             audit:{available:store.auditHealthy},
             activeModel:config.model,
-          });
+          }, req.method==='HEAD');
         }
         if(path==='/api/notes' && req.method==='GET') return send(res,200,{notes:store.notes()});
         if(path==='/api/audit' && req.method==='GET') return send(res,200,{events:store.events().reverse()});

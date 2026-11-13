@@ -30,11 +30,16 @@ async function fixture(t:test.TestContext,transport:typeof fetch = async()=>new 
 test('API rejects cross-origin, forged Host, missing session and CSRF',async t=>{
   const {request,headers}=await fixture(t);
   assert.equal((await request('/api/health')).status,401);
+  assert.equal((await request('/api/health',{method:'HEAD'})).status,401);
   assert.equal((await request('/api/session',{headers:{host:'evil.example'}})).status,403);
   assert.equal((await request('/api/session',{headers:{origin:'https://evil.example'}})).status,403);
   assert.equal((await request('/api/session',{headers:{'sec-fetch-site':'cross-site'}})).status,403);
   assert.equal((await request('/api/notes/anything',{method:'DELETE',headers:{cookie:headers.cookie,origin:headers.origin}})).status,403);
   assert.equal((await request('/api/health',{headers})).status,200);
+  const headHealth=await request('/api/health',{method:'HEAD',headers});
+  assert.equal(headHealth.status,200);
+  assert.equal(headHealth.headers.get('content-type'),'application/json');
+  assert.equal(await headHealth.text(),'');
 });
 test('invalid chat, unsupported voice, and failed approvals return actionable errors',async t=>{
   const {request,headers}=await fixture(t);
