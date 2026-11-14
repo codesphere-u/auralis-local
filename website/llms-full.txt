@@ -1,0 +1,3 @@
+# Auralis v0.4.0 — Complete Technical Reference
+
+Auralis runs local inference via Ollama (`<= 8 GiB` weight guard, cloud-alias blocking) with Fast (`2,048` ctx) and Balanced (`4,096` ctx) profiles, a local BM25 + exact-phrase knowledge base (`server/knowledge.ts`), zero-dependency FlateDecode PDF extraction (`server/pdf.ts`), guarded workspace inspection (`server/workspace.ts`), and Apple Silicon `vm_stat` memory profiling (`scripts/memory_profiler.ts`).

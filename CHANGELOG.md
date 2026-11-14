@@ -2,6 +2,12 @@
 
 All notable changes to Auralis are documented in this file.
 
+## [0.4.0] - 2026-11-14
+
+### Added
+- **Warm Ivory Editorial Multi-Page Website (`website/`)**: Deep Pacific (`#0f766e`) & Warm Sandstone (`#c2410c`) Handy-inspired showcase with dedicated pages (`index.html`, `studio.html`, `proof.html`, `rules.html`, `docs.html`), interactive Apple Silicon 4K/8K Memory & Knowledge Studio, 47-test verification proof, and full GEO/SEO assets (`llms.txt`, `llms-full.txt`, `sitemap.xml`, `robots.txt`, `manifest.webmanifest`, `og-image.svg`).
+- **GitHub Pages Workflow & Docs**: Added `.github/workflows/pages.yml`, [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md), root `llms.txt` / `llms-full.txt`, and `tests/website.test.ts`.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added

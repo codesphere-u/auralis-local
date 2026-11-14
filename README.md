@@ -1,6 +1,9 @@
 # Auralis
 
 [![CI](https://github.com/codesphere-u/auralis-local/actions/workflows/ci.yml/badge.svg)](https://github.com/codesphere-u/auralis-local/actions/workflows/ci.yml)
+[![Pages](https://github.com/codesphere-u/auralis-local/actions/workflows/pages.yml/badge.svg)](https://codesphere-u.github.io/auralis-local/)
+
+> **Live Website & Docs (`v0.4.0`):** [codesphere-u.github.io/auralis-local](https://codesphere-u.github.io/auralis-local/) · **Studio:** [studio.html](https://codesphere-u.github.io/auralis-local/studio.html) · **Proof:** [proof.html](https://codesphere-u.github.io/auralis-local/proof.html) · **Security Rules:** [rules.html](https://codesphere-u.github.io/auralis-local/rules.html) · **Docs:** [docs.html](https://codesphere-u.github.io/auralis-local/docs.html) · [LLM Context](llms.txt)
 
 **A calm, expressive assistant that keeps inference on your Mac.**
 

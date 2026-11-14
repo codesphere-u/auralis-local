@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auralis v0.4.0 — Private Local AI Workspace for Apple Silicon</title>
+  <meta name="description" content="Streamed Ollama chat, zero-dependency PDF extraction, hybrid BM25 knowledge base with line citations, loopback security, and local voice room.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="canonical" href="https://codesphere-u.github.io/auralis-local/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Auralis v0.4.0 — Private Local AI Workspace">
+  <meta property="og:description" content="A calm, expressive assistant that keeps inference, PDFs, BM25 retrieval, and voice on your Mac.">
+  <meta property="og:url" content="https://codesphere-u.github.io/auralis-local/">
+  <meta property="og:image" content="https://codesphere-u.github.io/auralis-local/og-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Auralis v0.4.0 — Private Local AI on Apple Silicon">
+  <meta name="twitter:description" content="47 passing tests, <=8 GiB weight guard, PDF + BM25 citations, and loopback-only API.">
+  <meta name="twitter:image" content="https://codesphere-u.github.io/auralis-local/og-image.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Newsreader:opsz,wght@6..72,600;6..72,700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script defer data-domain="codesphere-u.github.io" src="https://plausible.io/js/script.js"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", "name": "Codesphere Innovations (U) Limited", "url": "https://github.com/codesphere-u" },
+      { "@type": "Person", "name": "Ivan Akandwanaho" },
+      { "@type": "WebSite", "name": "Auralis", "url": "https://codesphere-u.github.io/auralis-local/" },
+      {
+        "@type": "SoftwareApplication",
+        "name": "Auralis",
+        "softwareVersion": "0.4.0",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux",
+        "license": "https://opensource.org/licenses/MIT",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Does Auralis ever fall back to cloud LLM endpoints?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Auralis blocks cloud aliases and remote hosts before transport, enforces an 8 GiB local weight guard, and keeps inference strictly on loopback." }
+          },
+          {
+            "@type": "Question",
+            "name": "How does Auralis index PDFs and local codebases?",
+            "acceptedAnswer": { "@type": "Answer", "text": "server/pdf.ts extracts FlateDecode and raw PDF text streams without external dependencies, and server/knowledge.ts ranks chunks using hybrid BM25 + exact-phrase scoring with #Lstart-Lend citations." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="Auralis mark"><span>Auralis</span></a>
+      <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+      <nav id="nav-links" class="nav-links" aria-label="Primary">
+        <a class="active" href="index.html">Overview</a>
+        <a href="studio.html">Memory Studio</a>
+        <a href="proof.html">Benchmark Proof</a>
+        <a href="rules.html">Security Rules</a>
+        <a href="docs.html">Docs</a>
+        <a class="nav-cta" href="https://github.com/codesphere-u/auralis-local/releases/tag/v0.4.0">v0.4.0 Release</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <span class="eyebrow">v0.4.0 · Apple Silicon Local AI</span>
+        <h1>A calm, private assistant that <span class="accent-word">stays on your Mac</span>.</h1>
+        <p class="lead">Auralis pairs streamed Ollama chat (`qwen3.5:4b`), zero-dependency FlateDecode PDF extraction, hybrid BM25 knowledge retrieval with line citations, and loopback-only security.</p>
+
+        <div class="btn-row">
+          <a class="btn btn-primary" href="studio.html">Open Memory Studio</a>
+          <a class="btn btn-amber" href="docs.html">Read Docs</a>
+          <a class="btn" href="https://github.com/codesphere-u/auralis-local">GitHub Repository</a>
+        </div>
+
+        <div class="install-box">
+          <code>npm install &amp;&amp; npm run check</code>
+          <button class="copy-btn" type="button" data-copy="npm install && npm run check">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="grid-4">
+          <div class="card card-white"><div class="stat-value">47 / 47</div><div class="stat-label">Automated security, PDF, BM25 &amp; voice tests passing</div></div>
+          <div class="card card-white"><div class="stat-value">&le; 8 GiB</div><div class="stat-label">Strict local weight guard with cloud-alias blocking</div></div>
+          <div class="card card-white"><div class="stat-value">2K / 4K</div><div class="stat-label">Fast &amp; Balanced context windows tuned for 16 GB Macs</div></div>
+          <div class="card card-white"><div class="stat-value">0 Cloud</div><div class="stat-label">Loopback-only API (`127.0.0.1:4317`) &amp; CSRF guards</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Engineered for shared unified memory</h2>
+        <div class="grid-3">
+          <article class="card">
+            <span class="badge">Zero-Dependency PDF</span>
+            <h3>BM25 + Line Citations</h3>
+            <p><code>server/pdf.ts</code> decodes FlateDecode PDFs offline while <code>server/knowledge.ts</code> returns <code>path#Lstart-Lend</code> citations before token streaming.</p>
+          </article>
+          <article class="card">
+            <span class="badge badge-amber">16 KiB vm_stat</span>
+            <h3>Memory Pressure Profiler</h3>
+            <p><code>scripts/memory_profiler.ts</code> measures active, wired, and compressed unified memory pages across 4K vs 8K context windows.</p>
+          </article>
+          <article class="card">
+            <span class="badge">Explicit Approval</span>
+            <h3>Guarded Workspace</h3>
+            <p>Blocks <code>..</code> traversal, symlinks, dotfiles, and secret files while requiring single-use CSRF-bound approval for indexing.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Auralis v0.4.0</strong> · MIT License · Codesphere Innovations (U) Limited</div>
+      <div class="footer-links"><a href="docs.html">Docs</a><a href="llms.txt">llms.txt</a><a href="sitemap.xml">sitemap.xml</a><a href="https://github.com/codesphere-u/auralis-local">GitHub</a></div>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

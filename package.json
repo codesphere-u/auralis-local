@@ -1,6 +1,6 @@
 {
   "name": "auralis-local",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "A deliberate, private AI workspace for Apple Silicon.",

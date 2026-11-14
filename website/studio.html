@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory Studio — Auralis v0.4.0</title>
+  <meta name="description" content="Interactive Auralis context window, weight guard, and BM25 knowledge grounding studio.">
+  <link rel="canonical" href="https://codesphere-u.github.io/auralis-local/studio.html">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="Auralis"><span>Auralis</span></a>
+      <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+      <nav id="nav-links" class="nav-links" aria-label="Primary">
+        <a href="index.html">Overview</a>
+        <a class="active" href="studio.html">Memory Studio</a>
+        <a href="proof.html">Benchmark Proof</a>
+        <a href="rules.html">Security Rules</a>
+        <a href="docs.html">Docs</a>
+        <a class="nav-cta" href="https://github.com/codesphere-u/auralis-local/releases/tag/v0.4.0">v0.4.0 Release</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding: 3rem 0 4rem;">
+    <span class="eyebrow">16 GB Unified Memory Tuner</span>
+    <h1>Context &amp; Knowledge Studio</h1>
+    <p class="lead">Preview how Fast (`2,048`) vs Balanced (`4,096`) context profiles and BM25 retrieval configure local Ollama inference.</p>
+
+    <div class="studio-grid">
+      <section class="card card-white">
+        <h2>Runtime Profile</h2>
+        <div class="field">
+          <label for="studio-model">Local Model (&le;8 GiB)</label>
+          <select id="studio-model">
+            <option value="qwen3.5:4b">qwen3.5:4b</option>
+            <option value="llama3.2:3b">llama3.2:3b</option>
+            <option value="gemma3:4b">gemma3:4b</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="studio-profile">Context Profile</label>
+          <select id="studio-profile">
+            <option value="fast">Fast (2,048 ctx)</option>
+            <option value="balanced">Balanced (4,096 ctx)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="studio-rag">Knowledge Grounding</label>
+          <select id="studio-rag">
+            <option value="on">Enabled (BM25 + PDF + Citations)</option>
+            <option value="off">Disabled</option>
+          </select>
+        </div>
+        <button id="studio-run" class="btn btn-primary" type="button" style="width:100%;">Preview Config</button>
+      </section>
+
+      <section class="card">
+        <span class="badge">Loopback Runtime Config</span>
+        <h2 style="margin-top:0.6rem;">Verified Local Session</h2>
+        <pre id="studio-output" class="code-block">{}</pre>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Auralis v0.4.0</strong> · Memory Studio</div>
+      <div class="footer-links"><a href="index.html">Overview</a><a href="proof.html">Benchmark Proof</a><a href="docs.html">Docs</a></div>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

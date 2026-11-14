@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmark Proof — Auralis v0.4.0</title>
+  <meta name="description" content="47 passing tests, Apple Silicon vm_stat memory pressure profiling, and local BM25 + PDF extraction benchmarks.">
+  <link rel="canonical" href="https://codesphere-u.github.io/auralis-local/proof.html">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="Auralis"><span>Auralis</span></a>
+      <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+      <nav id="nav-links" class="nav-links" aria-label="Primary">
+        <a href="index.html">Overview</a>
+        <a href="studio.html">Memory Studio</a>
+        <a class="active" href="proof.html">Benchmark Proof</a>
+        <a href="rules.html">Security Rules</a>
+        <a href="docs.html">Docs</a>
+        <a class="nav-cta" href="https://github.com/codesphere-u/auralis-local/releases/tag/v0.4.0">v0.4.0 Release</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding: 3rem 0 4rem;">
+    <span class="eyebrow eyebrow-amber">Verified Test &amp; Benchmark Suite</span>
+    <h1>47 Tests &amp; Memory Pressure Proof</h1>
+    <p class="lead">Every release runs <code>npm run check</code> (`tsx --test` + `tsc --noEmit` + `vite build`) alongside local pipeline and `vm_stat` profilers.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Subsystem</th><th>Verified Coverage</th><th>Runner</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>server/pdf.ts</code></td><td>Uncompressed &amp; FlateDecode streams, TJ kerning, magic-byte validation</td><td><code>npm test</code></td></tr>
+          <tr><td><code>server/knowledge.ts</code></td><td>1-based line chunking, BM25 + exact phrase, <code>0600</code> persistence</td><td><code>npm test</code></td></tr>
+          <tr><td><code>server/workspace.ts</code></td><td>Blocks <code>..</code> traversal, symlinks, dotfiles, secrets; single-use approvals</td><td><code>npm test</code></td></tr>
+          <tr><td><code>scripts/memory_profiler.ts</code></td><td>16 KiB Apple Silicon <code>vm_stat</code> paging across 4K vs 8K context</td><td><code>npm run benchmark:memory</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Auralis v0.4.0</strong> · Benchmark Proof</div>
+      <div class="footer-links"><a href="index.html">Overview</a><a href="rules.html">Security Rules</a><a href="docs.html">Docs</a></div>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

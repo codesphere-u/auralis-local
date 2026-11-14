@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentation — Auralis v0.4.0</title>
+  <meta name="description" content="Mac setup, Ollama configuration, hybrid BM25 + PDF knowledge base, and local voice room docs for Auralis v0.4.0.">
+  <link rel="canonical" href="https://codesphere-u.github.io/auralis-local/docs.html">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="Auralis"><span>Auralis</span></a>
+      <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+      <nav id="nav-links" class="nav-links" aria-label="Primary">
+        <a href="index.html">Overview</a>
+        <a href="studio.html">Memory Studio</a>
+        <a href="proof.html">Benchmark Proof</a>
+        <a href="rules.html">Security Rules</a>
+        <a class="active" href="docs.html">Docs</a>
+        <a class="nav-cta" href="https://github.com/codesphere-u/auralis-local/releases/tag/v0.4.0">v0.4.0 Release</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation sections">
+      <h4>Auralis Docs</h4>
+      <a class="active" href="#setup">1. Mac Setup</a>
+      <a href="#build">2. Production Server</a>
+      <a href="#knowledge">3. Knowledge &amp; PDF</a>
+      <a href="#voice">4. Voice Room</a>
+      <a href="#benchmark">5. Benchmarks</a>
+    </aside>
+
+    <article class="docs-article">
+      <span class="eyebrow">Reference · v0.4.0</span>
+      <h1 style="margin-top:0.85rem;">Auralis Documentation</h1>
+      <p class="lead">Requires Node.js 22.12+ and Ollama on Apple Silicon (or Linux).</p>
+
+      <section id="setup">
+        <h2>1. Mac Setup</h2>
+        <pre class="code-block">git clone https://github.com/codesphere-u/auralis-local.git
+cd auralis-local
+ollama pull qwen3.5:4b
+npm install
+npm run dev</pre>
+      </section>
+
+      <section id="build">
+        <h2>2. Production Server</h2>
+        <pre class="code-block">npm run build
+npm start</pre>
+        <p>Serves both the built React UI and protected API at <code>http://127.0.0.1:4317</code>.</p>
+      </section>
+
+      <section id="knowledge">
+        <h2>3. Knowledge Base &amp; PDF</h2>
+        <p>Use the Knowledge view or <code>POST /api/knowledge/documents</code> to index Markdown, source files, and PDFs with <code>#Lstart-Lend</code> citations.</p>
+      </section>
+
+      <section id="voice">
+        <h2>4. Voice Room</h2>
+        <pre class="code-block">npm run voice:setup
+npm run build
+npm run talk</pre>
+      </section>
+
+      <section id="benchmark">
+        <h2>5. Benchmarks &amp; Checks</h2>
+        <pre class="code-block">npm run check
+npm run benchmark -- --local-only
+npm run benchmark:memory</pre>
+      </section>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Auralis v0.4.0</strong> · Documentation</div>
+      <div class="footer-links"><a href="index.html">Overview</a><a href="studio.html">Memory Studio</a><a href="https://github.com/codesphere-u/auralis-local">GitHub</a></div>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

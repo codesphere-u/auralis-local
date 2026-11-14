@@ -6,9 +6,9 @@ authors:
     email: "codesphereinnovationz@gmail.com"
     affiliation: "Codesphere Innovations (U) Limited"
 title: "Auralis Local"
-abstract: "Zero-Cloud Edge Speech Recognition and High-Fidelity Audio Synthesis Engine"
-version: "1.0.0"
-date-released: 2026-11-10
+abstract: "Deliberate, Private Local AI Workspace with Streamed Chat, Hybrid BM25 Knowledge Base, PDF Extraction, and Voice Room for Apple Silicon"
+version: "0.4.0"
+date-released: 2026-11-14
 url: "https://github.com/codesphere-u/auralis-local"
 repository-code: "https://github.com/codesphere-u/auralis-local"
 license: "MIT"

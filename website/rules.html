@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Rules — Auralis v0.4.0</title>
+  <meta name="description" content="Loopback origin checks, CSRF tokens, <=8 GiB weight guard, and explicit write approval rules in Auralis.">
+  <link rel="canonical" href="https://codesphere-u.github.io/auralis-local/rules.html">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="Auralis"><span>Auralis</span></a>
+      <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+      <nav id="nav-links" class="nav-links" aria-label="Primary">
+        <a href="index.html">Overview</a>
+        <a href="studio.html">Memory Studio</a>
+        <a href="proof.html">Benchmark Proof</a>
+        <a class="active" href="rules.html">Security Rules</a>
+        <a href="docs.html">Docs</a>
+        <a class="nav-cta" href="https://github.com/codesphere-u/auralis-local/releases/tag/v0.4.0">v0.4.0 Release</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding: 3rem 0 4rem;">
+    <span class="eyebrow">Localhost Governance &amp; Isolation</span>
+    <h1>Security &amp; Approval Rules</h1>
+    <p class="lead">Strict boundaries keep inference local, reject forged origins, and require explicit human approval for disk writes.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Guardrail</th><th>Enforcement</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Loopback &amp; Origin Lock</td><td>Rejects cross-origin requests, forged <code>Host</code> headers, missing sessions, and CSRF mismatches</td></tr>
+          <tr><td>Local Weight Guard</td><td>Rejects cloud-hosted model aliases, remote metadata, and weights exceeding <code>8 GiB</code></td></tr>
+          <tr><td>Workspace Path Guard</td><td>Blocks traversal, symlinks, dotfiles, <code>node_modules</code>, and private-key filenames</td></tr>
+          <tr><td>Single-Use Approvals</td><td>Memory notes and <code>knowledge.index</code> proposals expire, bind to session owner, and cannot replay</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Auralis v0.4.0</strong> · Security Rules</div>
+      <div class="footer-links"><a href="index.html">Overview</a><a href="studio.html">Memory Studio</a><a href="docs.html">Docs</a></div>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Auralis (`v0.4.0`)
+
+> Calm, private local AI workspace for Apple Silicon: streamed Ollama chat, zero-dependency PDF extraction, hybrid BM25 knowledge base with line citations, loopback security, and local voice room.
+
+- Website: https://codesphere-u.github.io/auralis-local/
+- Memory & Context Studio: https://codesphere-u.github.io/auralis-local/studio.html
+- Benchmark & Test Proof: https://codesphere-u.github.io/auralis-local/proof.html
+- Loopback & Security Rules: https://codesphere-u.github.io/auralis-local/rules.html
+- Documentation: https://codesphere-u.github.io/auralis-local/docs.html
+- Repository: https://github.com/codesphere-u/auralis-local
+- License: MIT
